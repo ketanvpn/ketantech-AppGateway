@@ -5,7 +5,8 @@ import { settingsStore } from "../store/settingsStore";
 import { getOrderedProviders } from "../providers";
 import { syncOrderKuotaStatus } from "./orderkuotaSyncService";
 import { refundPayment } from "./refundService";
-import { PaymentStatus, ProviderName } from "../types";
+import { PaymentStatus } from "../types";
+
 
 /**
  * Telegram bot integration — notifikasi event + command interaktif untuk admin.
@@ -309,10 +310,11 @@ async function runOrderKuotaSync(chatId: number): Promise<void> {
 
 async function runRefund(chatId: number, orderId: string): Promise<void> {
   if (!bot) return;
-  // Cari transaksi by orderId (atau ID langsung)
+  // Cari transaksi by orderId, fallback ke gateway tx ID kalau user kirim itu
   const tx =
-    transactionStore.findByOrderId?.(orderId) ??
+    transactionStore.findByOrderId(orderId) ??
     transactionStore.findById(orderId);
+
   if (!tx) {
     await bot.sendMessage(chatId, `❌ Transaksi \`${orderId}\` tidak ditemukan.`, {
       parse_mode: "Markdown",

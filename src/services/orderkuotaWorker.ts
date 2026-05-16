@@ -26,6 +26,10 @@ const POLL_INTERVAL_MS = parseInt(
 
 let timer: NodeJS.Timeout | null = null;
 let running = false;
+// Cegah spam Telegram alert: hanya kirim sekali per 30 menit untuk error sama
+let lastTokenExpiredAlertAt = 0;
+const TOKEN_EXPIRED_ALERT_INTERVAL_MS = 30 * 60_000;
+
 
 export function startOrderKuotaWorker(): void {
   if (timer) {
@@ -88,13 +92,33 @@ async function tick(): Promise<void> {
       );
     }
   } catch (err) {
+    const message = (err as Error).message || "";
     // Sengaja tidak rethrow — kita tidak mau worker mati cuma karena
     // sekali fail (misal token expired). Log saja, retry tick berikutnya.
     logger.error(
-      { err: (err as Error).message, worker: true },
+      { err: message, worker: true },
       "OrderKuota worker tick failed",
     );
+
+    // Detect token expired (401 / unauthorized) → kirim Telegram alert sekali
+    // per 30 menit, supaya admin tahu perlu re-login OTP. Worker sendiri
+    // tetap jalan, cuma skip karena auth gagal.
+    const looksLikeAuthError =
+      message.includes("401") ||
+      message.toLowerCase().includes("unauthorized") ||
+      message.toLowerCase().includes("token");
+    if (
+      looksLikeAuthError &&
+      Date.now() - lastTokenExpiredAlertAt > TOKEN_EXPIRED_ALERT_INTERVAL_MS
+    ) {
+      lastTokenExpiredAlertAt = Date.now();
+      import("./telegramBot")
+        .then((m) => m.notifyOrderKuotaTokenExpired())
+        .catch(() => {});
+    }
   } finally {
     running = false;
   }
 }
+
+
