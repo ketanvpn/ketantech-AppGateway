@@ -1,0 +1,51 @@
+{
+  "name": "payment-gateway",
+  "version": "1.0.0",
+  "description": "Application Gateway Pattern - Payment Gateway dengan multi-provider & fallback otomatis",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:dashboard": "npm --prefix dashboard run dev",
+    "dev:all": "concurrently --names \"GATEWAY,DASHBOARD\" --prefix-colors \"cyan,magenta\" --kill-others-on-fail \"npm run dev\" \"npm run dev:dashboard\"",
+    "build": "tsc",
+    "build:dashboard": "npm --prefix dashboard run build",
+    "build:all": "npm run build && npm run build:dashboard",
+    "start": "node dist/index.js",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "gateway",
+    "payment",
+    "midtrans",
+    "xendit",
+    "fallback"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "express": "4.19.2",
+    "express-rate-limit": "7.4.0",
+    "helmet": "^8.0.0",
+    "pino": "9.4.0",
+    "pino-pretty": "11.2.2",
+    "uuid": "10.0.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "4.17.21",
+    "@types/jest": "29.5.13",
+    "@types/node": "22.7.5",
+    "@types/supertest": "6.0.2",
+    "@types/uuid": "10.0.0",
+    "concurrently": "^9.0.1",
+    "jest": "29.7.0",
+    "supertest": "7.0.0",
+    "ts-jest": "29.2.5",
+    "tsx": "4.19.1",
+    "typescript": "5.5.4"
+  }
+}

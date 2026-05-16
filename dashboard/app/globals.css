@@ -1,0 +1,82 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+
+  /* Slimmer & more modern scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(203 213 225 / 0.6);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(148 163 184 / 0.7);
+    background-clip: padding-box;
+  }
+
+  /* Hilangkan focus ring browser default, kita pakai ring custom */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: none;
+    @apply ring-2 ring-brand-500/40;
+  }
+}
+
+@layer components {
+  /* Primary button — solid brand color */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Secondary button — neutral */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Ghost button — text only */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  /* Card container */
+  .card {
+    @apply rounded-xl border border-slate-200/80 bg-white shadow-soft;
+  }
+
+  /* Input field */
+  .input {
+    @apply block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15;
+  }
+
+  /* Label */
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-slate-700;
+  }
+}
