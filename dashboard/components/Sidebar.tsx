@@ -61,12 +61,13 @@ export function Sidebar() {
             <Logo />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight text-white">
-                Payment Gateway
+                KetantechPay
               </div>
               <div className="text-[11px] text-slate-400">
-                Application Gateway
+                Payment Gateway
               </div>
             </div>
+
           </div>
           {/* Close button — mobile only */}
           <button
@@ -142,8 +143,9 @@ export function Sidebar() {
             <span>System Operational</span>
           </div>
           <div className="mt-1 text-[10px] text-slate-500">
-            v1.0 · Application Gateway Pattern
+            KetantechPay v1.0 · by Ketantech
           </div>
+
         </div>
       </aside>
     </>

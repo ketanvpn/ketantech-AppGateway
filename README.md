@@ -1,10 +1,15 @@
-# Payment Gateway — Application Gateway Pattern
+# KetantechPay — Payment Gateway
 
-Gateway pembayaran multi-provider dengan **fallback otomatis**, dashboard admin, dan integrasi siap pakai untuk Node, PHP, Python.
+> **KetantechPay** by **Ketantech** — Gateway pembayaran multi-provider dengan auto-fallback, dashboard admin, dan integrasi siap pakai untuk Node, PHP, Python.
+
+[![Tests](https://img.shields.io/badge/tests-97%20passed-success)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](#)
+[![Mobile](https://img.shields.io/badge/dashboard-mobile%20friendly-violet)](#)
 
 > 📦 Repo: <https://github.com/ketanvpn/ketantech-AppGateway>
 > 📘 [INTEGRATION.md](./INTEGRATION.md) — panduan integrasi ke aplikasi Anda
 > 🔒 [SECURITY.md](./SECURITY.md) — kontrol keamanan & tanggung jawab operator
+
 
 ---
 
@@ -17,9 +22,11 @@ Gateway pembayaran multi-provider dengan **fallback otomatis**, dashboard admin,
 5. [Mengatur Credentials](#mengatur-credentials-provider)
 6. [API](#api)
 7. **[Deploy ke VPS](#deploy-ke-vps-tutorial-untuk-pemula)** ← tutorial step-by-step
-8. **[Deploy ke Cloud Hosting](#deploy-ke-cloud-hosting)** ← Railway, Render, dll
-9. [Push ke GitHub](#push-ke-github)
-10. [Production Checklist](#production-checklist)
+8. **[Deploy ke Shared Hosting (cPanel)](#deploy-ke-shared-hosting-cpanel)** ← Niagahoster, Hostinger, dll
+9. **[Deploy ke Cloud Platform](#deploy-ke-cloud-platform)** ← Railway, Render (alternatif)
+10. [Push ke GitHub](#push-ke-github)
+11. [Production Checklist](#production-checklist)
+
 
 ---
 
@@ -507,11 +514,183 @@ Untuk backup harian otomatis ke cloud, lihat tools seperti `restic` + Backblaze 
 
 ---
 
-## Deploy ke Cloud Hosting
+## Deploy ke Shared Hosting (cPanel)
 
-Untuk yang tidak mau urus VPS, beberapa opsi cloud yang gampang:
+Banyak orang Indonesia pakai **shared hosting** (Niagahoster, Hostinger, Domainesia, Rumahweb, IDwebhost, dll) karena murah & gampang. Aplikasi ini **bisa** dijalankan di shared hosting yang support **Node.js**, lewat fitur **"Setup Node.js App"** di cPanel.
+
+> ⚠️ **Penting — keterbatasan shared hosting:**
+> - Sebagian shared hosting **tidak** support Node.js. Cek dulu di paket Anda.
+> - Resource terbatas (RAM 256–512 MB) — OK untuk traffic kecil-menengah, tidak untuk volume tinggi
+> - Tidak ada akses root → background worker OrderKuota mungkin di-kill saat idle (depends on hosting)
+> - **Untuk volume transaksi tinggi atau production serius, pilih VPS** (section sebelumnya)
+
+### Pilihan paket yang cocok
+
+| Provider | Paket | Node.js | Catatan |
+|---|---|---|---|
+| **Niagahoster** | Cloud Hosting Personal+ / Bisnis | ✅ | Setup Node.js app via cPanel |
+| **Hostinger** | Premium / Business | ✅ | Setup Node.js app via hPanel |
+| **Domainesia** | Hosting Indonesia / Bisnis | ✅ | Cek "Node.js Selector" di cPanel |
+| **IDwebhost** | Cloud Hosting Pro+ | ✅ | "Setup Node.js App" di cPanel |
+| **Rumahweb** | Cloud SSD Personal+ | ✅ | Konfirmasi support Node 20 |
+
+### Yang Anda butuhkan
+
+- Domain (mis. `gateway.tokoanda.com`) yang sudah pointing ke server hosting
+- Akses cPanel
+- Paket hosting yang support **Node.js 20** (cek deskripsi paket)
+
+### Langkah 1 — Upload kode ke hosting
+
+**Opsi A: Pakai Git (recommended)** — kalau hosting support fitur "Git Version Control":
+1. Login cPanel → cari **Git Version Control**
+2. **Create** → URL: `https://github.com/ketanvpn/ketantech-AppGateway.git`
+3. Branch: `main`, deploy path: `/home/USERNAME/ketantech-gateway`
+
+**Opsi B: Upload manual** kalau tidak ada Git:
+1. Build dulu di komputer Anda: `npm run build:all`
+2. Compress folder project (exclude `node_modules`, `.git`, `data/`)
+3. Login cPanel → **File Manager** → upload zip → extract
+
+### Langkah 2 — Setup Node.js app (Backend)
+
+Di cPanel, cari **"Setup Node.js App"** atau **"Node.js Selector"**:
+
+1. Klik **Create Application**
+2. Isi:
+   - **Node.js version**: 20.x (pilih yang tertinggi)
+   - **Application mode**: Production
+   - **Application root**: `ketantech-gateway` (folder tempat upload)
+   - **Application URL**: `https://gateway.tokoanda.com`
+   - **Application startup file**: `dist/index.js`
+3. **Create**
+
+Setelah app dibuat, cPanel kasih command untuk activate environment:
+
+```bash
+source /home/USERNAME/nodevenv/ketantech-gateway/20/bin/activate
+cd /home/USERNAME/ketantech-gateway
+```
+
+Jalankan command itu di **Terminal cPanel** (atau SSH kalau ada).
+
+### Langkah 3 — Install dependencies + build
+
+Di terminal cPanel (setelah activate):
+
+```bash
+npm install
+npm run build
+```
+
+### Langkah 4 — Setup environment variables
+
+Di **Setup Node.js App** → klik app yang baru dibuat → scroll ke **Environment variables**.
+
+Tambah satu per satu (klik **Add Variable**):
+
+| Name | Value |
+|---|---|
+| `NODE_ENV` | `production` |
+| `ADMIN_API_KEY` | (generate random 32-char, pakai online generator) |
+| `CORS_ORIGIN` | `https://gateway.tokoanda.com` |
+| `TRUST_PROXY` | `true` |
+| `DATABASE_PATH` | `/home/USERNAME/ketantech-gateway/data/gateway.db` |
+| `MIDTRANS_SERVER_KEY` | `Mid-server-xxx` |
+| `XENDIT_SECRET_KEY` | `xnd_xxx` |
+| `XENDIT_CALLBACK_TOKEN` | `xxx` |
+| ... | (provider lain sesuai akun Anda) |
+
+> 💡 Untuk generate ADMIN_API_KEY tanpa terminal: buka <https://generate-secret.vercel.app/32> di browser, copy hasilnya.
+
+### Langkah 5 — Restart app
+
+Di **Setup Node.js App** → klik **Restart**. Backend sekarang jalan.
+
+Cek: buka `https://gateway.tokoanda.com/health` di browser — harus muncul `{"status":"ok"}`.
+
+### Langkah 6 — Setup dashboard (Next.js) sebagai app kedua
+
+**Opsi A: Static export** (paling simpel di shared hosting):
+
+Build dashboard sebagai static HTML, upload ke subfolder atau subdomain.
+
+```bash
+# Di komputer Anda
+cd dashboard
+# Edit next.config.js, tambah: output: 'export'
+npm run build
+# Hasil ada di dashboard/out/
+```
+
+Upload isi folder `dashboard/out/` ke subdomain (mis. `admin.tokoanda.com` → folder `public_html/admin/`). Set di file manager.
+
+Karena dashboard adalah SPA static, semua call backend pakai `localStorage.apiBase` yang Anda set saat login.
+
+**Opsi B: Setup Node.js App kedua** untuk dashboard (kalau hosting izinkan multi app):
+1. **Create Application** baru
+2. Application root: `ketantech-gateway/dashboard`
+3. Startup file: `node_modules/next/dist/bin/next` dengan args `start -p 3001`
+4. Tambah env: `NODE_ENV=production`
+5. Build: di terminal `cd dashboard && npm run build`
+
+### Langkah 7 — Akses dashboard & set API base
+
+Buka URL dashboard di browser. Di login screen, isi:
+- **API Base URL**: `https://gateway.tokoanda.com` (URL backend)
+- **Admin API Key**: nilai `ADMIN_API_KEY` yang Anda set
+
+### Langkah 8 — Setup webhook URL di provider
+
+Sama seperti VPS:
+
+```
+https://gateway.tokoanda.com/api/v1/webhooks/midtrans
+https://gateway.tokoanda.com/api/v1/webhooks/xendit
+https://gateway.tokoanda.com/api/v1/webhooks/doku
+https://gateway.tokoanda.com/api/v1/webhooks/tripay
+```
+
+### Update aplikasi nanti
+
+```bash
+# Pakai Git (kalau pakai opsi A di langkah 1)
+cd ~/ketantech-gateway
+git pull
+npm install
+npm run build
+# Restart via cPanel
+```
+
+Atau upload manual file yang berubah, lalu **Restart** app di cPanel.
+
+### Catatan & batasan
+
+| Hal | Catatan |
+|---|---|
+| **Background worker OrderKuota** | Mungkin di-kill saat hosting deteksi idle. Set `ORDERKUOTA_WORKER_DISABLED=true` dan pakai cron eksternal (UptimeRobot heartbeat ke `/api/v1/admin/orderkuota/sync`). |
+| **HTTPS / SSL** | Kebanyakan hosting Indonesia kasih Let's Encrypt gratis di cPanel — aktifkan di **SSL/TLS Status**. |
+| **Backup database** | `data/gateway.db` perlu di-backup terjadwal. Cek fitur **Backups** di cPanel. |
+| **Email notification** | Tidak built-in; bisa pakai SMTP cPanel kalau perlu integrate notifikasi nanti. |
+| **Resource limit** | Shared hosting biasanya 1 CPU + 512MB RAM per app. Cukup untuk <50 transaksi/menit. Kalau overload, upgrade ke VPS. |
+
+### Troubleshooting
+
+| Masalah | Solusi |
+|---|---|
+| App tidak start, log "Application failed to start" | Cek **Logs** di Setup Node.js App. Sering karena `dist/index.js` tidak ada — jalankan `npm run build` ulang. |
+| Production safety check error | Cek env vars: `ADMIN_API_KEY` jangan default, `CORS_ORIGIN` jangan localhost |
+| Worker tidak jalan | Set `ORDERKUOTA_WORKER_DISABLED=true`, pakai cron eksternal |
+| Permission denied write DB | `chmod 755 ~/ketantech-gateway/data` di terminal |
+
+---
+
+## Deploy ke Cloud Platform
+
+Alternatif untuk yang tidak mau urus VPS atau shared hosting:
 
 ### Railway.app (paling simpel, ada free tier)
+
 
 1. Login Railway, klik **New Project** → **Deploy from GitHub** → pilih repo `ketantech-AppGateway`
 2. Railway auto-detect Node — biarkan default

@@ -1,8 +1,15 @@
 {
-  "name": "payment-gateway",
+  "name": "ketantechpay",
   "version": "1.0.0",
-  "description": "Application Gateway Pattern - Payment Gateway dengan multi-provider & fallback otomatis",
+  "description": "KetantechPay — Payment gateway multi-provider dengan auto-fallback. By Ketantech.",
   "main": "dist/index.js",
+  "homepage": "https://github.com/ketanvpn/ketantech-AppGateway",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ketanvpn/ketantech-AppGateway.git"
+  },
+  "author": "Ketantech",
+
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:dashboard": "npm --prefix dashboard run dev",
@@ -19,10 +26,15 @@
     "payment",
     "midtrans",
     "xendit",
-    "fallback"
+    "doku",
+    "tripay",
+    "orderkuota",
+    "qris",
+    "fallback",
+    "ketantech"
   ],
-  "author": "",
   "license": "MIT",
+
   "dependencies": {
     "cors": "2.8.5",
     "dotenv": "16.4.5",

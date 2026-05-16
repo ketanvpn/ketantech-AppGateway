@@ -8,9 +8,11 @@ import { ToastProvider } from "@/components/Toast";
 
 
 export const metadata: Metadata = {
-  title: "Payment Gateway · Admin",
-  description: "Application Gateway Pattern · Multi-provider payment gateway",
+  title: "KetantechPay · Admin Dashboard",
+  description:
+    "KetantechPay — Multi-provider payment gateway by Ketantech. Auto-fallback, idempotency, dashboard real-time.",
 };
+
 
 export const viewport: Viewport = {
   width: "device-width",

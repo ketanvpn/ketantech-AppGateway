@@ -1,7 +1,9 @@
 {
-  "name": "payment-gateway-dashboard",
+  "name": "ketantechpay-dashboard",
   "version": "1.0.0",
+  "description": "Admin dashboard untuk KetantechPay payment gateway",
   "private": true,
+
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",

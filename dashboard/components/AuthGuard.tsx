@@ -86,8 +86,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-white">
-                Payment Gateway
+                KetantechPay
               </h1>
+
               <p className="text-xs text-slate-400">Admin Dashboard</p>
             </div>
           </div>
