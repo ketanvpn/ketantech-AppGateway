@@ -89,7 +89,9 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - Refresh-status (pull dari provider, untuk recover transaksi yang webhook-nya hilang)
 - Health endpoints: `/health`, `/health/ready` (DB), `/health/providers`
 - OrderKuota background worker (sync mutasi tiap 30s di backend)
+- **Telegram bot** — notifikasi event + command interaktif (`/stats`, `/last`, `/refund`, dll)
 - Audit log queryable lewat `/admin/audit`
+
 
 **Testing:** 97 tests dengan Jest + Supertest
 
@@ -821,7 +823,77 @@ Sebelum go-live:
 
 ---
 
+## Telegram Bot (Notifikasi + Command Interaktif)
+
+Bot Telegram opsional — kirim notifikasi event penting ke chat admin & terima command interaktif.
+
+### Setup (5 menit)
+
+**1. Buat bot baru:**
+- Buka @BotFather di Telegram
+- Kirim `/newbot`, ikuti instruksi (set nama bot & username)
+- BotFather akan kasih **TOKEN** seperti `1234567890:ABCdef...` — copy
+
+**2. Cari chat ID Anda:**
+- Chat bot baru Anda, kirim `/start`
+- Buka di browser: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+- Cari `"chat":{"id":NUMBER}` — itu chat ID Anda
+
+**3. Set di `.env`:**
+```env
+TELEGRAM_BOT_TOKEN=1234567890:ABCdef...
+TELEGRAM_ADMIN_CHAT_IDS=12345678
+# Multi-admin: pisah pakai koma → 12345678,87654321
+```
+
+**4. Restart backend:**
+```bash
+npm run dev   # atau pm2 restart gateway-backend
+```
+
+Cek log — harus muncul: `Telegram bot started { adminChatCount: 1 }`. Kalau token kosong, bot disabled (no-op).
+
+### Notifikasi Otomatis
+
+Bot kirim message ke admin saat:
+
+| Event | Contoh Message |
+|---|---|
+| 📥 Pembayaran sukses | "Order ID: ORDER-001 · Rp 50.000 · via Midtrans" |
+| ❌ Pembayaran gagal/expired | "Order ID: ORDER-001 · Rp 50.000 · Failed" |
+| 💸 Refund | "Order: ORDER-001 di-refund Rp 50.000" |
+| 🚨 Semua provider down | "Gateway critical! Customer tidak bisa charge sekarang" |
+| 🔑 OrderKuota token expired | "Perlu login ulang OTP di /orderkuota" |
+
+### Command Interaktif
+
+Chat bot dengan command berikut (cuma admin yang ada di whitelist):
+
+| Command | Fungsi |
+|---|---|
+| `/start` atau `/help` | Tampilkan menu |
+| `/stats` | Ringkasan transaksi hari ini (total, sukses, gagal, total Rp) |
+| `/last` atau `/last 10` | List N transaksi terakhir (default 5, max 20) |
+| `/health` | Status semua provider (✅/❌/⏸️) |
+| `/sync` | Trigger OrderKuota sync mutasi manual |
+| `/refund <orderId>` | Refund transaksi (butuh konfirmasi "YA") |
+
+**Security:**
+- Cuma chat ID di `TELEGRAM_ADMIN_CHAT_IDS` yang bisa kirim command (orang random di-ignore tanpa balasan)
+- Rate limit per chat: 30 message/menit
+- Refund command butuh konfirmasi balas "YA" dalam 30 detik
+- Semua action via bot tetap masuk audit log
+
+### Tips
+
+- **Group chat:** Tambah bot ke group, dapat chat ID negative (mis. `-1001234`). Tempel ke `TELEGRAM_ADMIN_CHAT_IDS`. Semua admin di group dapat notifikasi.
+- **Multiple bot:** Mau pisah notifikasi per environment (staging vs production)? Buat bot terpisah di @BotFather, set `TELEGRAM_BOT_TOKEN` beda di tiap deployment.
+- **Channel:** Mau notif ke channel public/private? Tambah bot sebagai admin channel, ambil channel ID. Sama caranya.
+
+---
+
 ## Mengganti Mock Provider dengan API Asli
+
 
 Default-nya provider Midtrans/Xendit/DOKU/Tripay ada wrapper REST yang tinggal isi credential. Untuk OrderKuota, integrasi sudah complete (charge, sync mutasi).
 

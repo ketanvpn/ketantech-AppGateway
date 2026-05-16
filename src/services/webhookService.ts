@@ -167,5 +167,38 @@ export async function processWebhook(
     "transaksi diupdate dari webhook",
   );
 
+  // Telegram notification — fire and forget (jangan block webhook response).
+  // Import lazy supaya tidak break kalau bot tidak diaktifkan.
+  if (updated && event.status === "success") {
+    import("./telegramBot")
+      .then((m) =>
+        m.notifyTransactionSuccess({
+          orderId: updated.orderId,
+          amount: updated.amount,
+          currency: updated.currency,
+          providerName: updated.providerName,
+          method: updated.method,
+          id: updated.id,
+        }),
+      )
+      .catch(() => {});
+  } else if (
+    updated &&
+    (event.status === "failed" || event.status === "expired")
+  ) {
+    import("./telegramBot")
+      .then((m) =>
+        m.notifyTransactionFailed({
+          orderId: updated.orderId,
+          amount: updated.amount,
+          currency: updated.currency,
+          reason: event.status === "expired" ? "Expired" : "Failed",
+        }),
+      )
+      .catch(() => {});
+  }
+
   return { status: "applied", transaction: updated };
 }
+
+

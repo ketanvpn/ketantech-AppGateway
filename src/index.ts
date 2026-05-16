@@ -5,6 +5,11 @@ import {
   startOrderKuotaWorker,
   stopOrderKuotaWorker,
 } from "./services/orderkuotaWorker";
+import {
+  startTelegramBot,
+  stopTelegramBot,
+} from "./services/telegramBot";
+
 
 /**
  * Startup safety checks — gagal cepat di production kalau config tidak aman.
@@ -113,14 +118,19 @@ const server = app.listen(config.port, () => {
   // Background worker untuk OrderKuota status sync.
   // Idempotent — internal-nya cek apakah credential ada sebelum call.
   startOrderKuotaWorker();
+
+  // Telegram bot — auto-skip kalau TELEGRAM_BOT_TOKEN belum di-set.
+  startTelegramBot();
 });
 
 const shutdown = (signal: string) => {
   logger.info({ signal }, "shutting down");
   stopOrderKuotaWorker();
+  stopTelegramBot();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000).unref();
 };
+
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));

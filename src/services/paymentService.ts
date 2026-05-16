@@ -132,9 +132,15 @@ export async function chargePayment(
   };
   transactionStore.save(failedRecord);
 
+  // Telegram alert — fire and forget
+  import("./telegramBot")
+    .then((m) => m.notifyAllProvidersDown())
+    .catch(() => {});
+
   throw new GatewayError(
     "ALL_PROVIDERS_FAILED",
     "All payment providers are unavailable",
+
     503,
     { attempts },
   );

@@ -63,5 +63,18 @@ export async function refundPayment(
     "transaction refunded",
   );
 
+  // Telegram notify — fire and forget
+  import("./telegramBot")
+    .then((m) =>
+      m.notifyRefund({
+        orderId: updated.orderId,
+        amount: updated.amount,
+        currency: updated.currency,
+      }),
+    )
+    .catch(() => {});
+
   return updated;
 }
+
+
