@@ -2,9 +2,12 @@
 
 > **KetantechPay** by **Ketantech** — Gateway pembayaran multi-provider dengan auto-fallback, dashboard admin, dan integrasi siap pakai untuk Node, PHP, Python.
 
-[![Tests](https://img.shields.io/badge/tests-97%20passed-success)](#)
+[![Tests](https://img.shields.io/badge/tests-127%20passed-success)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](#)
 [![Mobile](https://img.shields.io/badge/dashboard-mobile%20friendly-violet)](#)
+[![Security](https://img.shields.io/badge/CVE-0-success)](#)
+[![PCI-DSS](https://img.shields.io/badge/PCI--DSS-reduced%20scope-blue)](#)
+
 
 > 📦 Repo: <https://github.com/ketanvpn/ketantech-AppGateway>
 > 📘 [INTEGRATION.md](./INTEGRATION.md) — panduan integrasi ke aplikasi Anda
@@ -70,15 +73,22 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - 4 provider pertama via REST API resmi (signature verification untuk webhook)
 - OrderKuota: integrasi unofficial untuk QRIS dynamic + auto-poll mutasi (tidak ada webhook native)
 
-**Security:**
+**Security (PCI-DSS / OWASP Top 10 hardened):**
+- 🔐 **AES-256-GCM encryption-at-rest** untuk semua secret credentials di SQLite
+- 🚫 **SSRF protection** — block private IP, AWS metadata, IPv6 ULA/link-local
+- 🔒 **Account lockout** PCI-DSS 8.1.6 (10 failed attempts → 15 menit lockout)
+- 📋 **Audit log hash chain** (HMAC-SHA256) — tampering detection
+- ⚛️ **Idempotency atomic claim** — cegah race condition double-charge
 - Admin auth dengan timing-safe compare
 - Multi-tenant client API keys
 - Production startup safety check (blok deploy dengan default key/CORS unsafe)
-- Idempotency body-hash check
-- Webhook strict deduplication (payload hash) + amount cross-check
-- Audit log untuk refund, settings, credentials, system update, export
-- PII redaction di logger (email/phone/secrets di-mask)
+- Webhook strict deduplication (payload hash) + amount cross-check + signature verification
+- PII redaction di logger (email/phone/secrets/OTP/tokens di-mask)
 - Helmet + CORS allowlist + trust-proxy aware
+- **0 CVE outstanding** (dependencies up-to-date)
+
+> 🛡️ Lihat [SECURITY-AUDIT-2026-05.md](./SECURITY-AUDIT-2026-05.md) untuk audit lengkap (OWASP Top 10 findings + PCI-DSS gap analysis)
+
 
 **Operability:**
 - Dashboard Next.js (mobile-friendly) untuk monitoring & manage
@@ -93,7 +103,8 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - Audit log queryable lewat `/admin/audit`
 
 
-**Testing:** 97 tests dengan Jest + Supertest
+**Testing:** 127 tests dengan Jest + Supertest (termasuk 30 security tests untuk encryption, SSRF, lockout)
+
 
 ---
 
@@ -912,4 +923,6 @@ Internal use. PR / issue di <https://github.com/ketanvpn/ketantech-AppGateway>.
 
 ---
 
-**Build status:** 97 tests pass · TypeScript strict · Mobile-friendly dashboard
+**Build status:** 127 tests pass · TypeScript strict · Mobile-friendly dashboard · 0 CVE
+
+

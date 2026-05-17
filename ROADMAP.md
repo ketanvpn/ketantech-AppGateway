@@ -10,8 +10,10 @@ Catatan untuk pengembangan ke depan. Aplikasi sudah siap untuk **single-tenant**
 - 5 provider built-in (Midtrans, Xendit, DOKU, Tripay, OrderKuota)
 - Auto-fallback + retry + idempotency
 - Dashboard admin (mobile-friendly)
-- 97 tests, security hardened
+- 127 tests, security hardened (PCI-DSS reduced scope eligible)
+- AES-256-GCM encryption-at-rest, SSRF guard, account lockout, audit hash chain
 - Single shared `ADMIN_API_KEY` untuk login
+
 - Multi-tenant client API keys (untuk aplikasi yang panggil gateway)
 
 ---

@@ -1,8 +1,22 @@
 # Security Posture
 
-Dokumen ini merangkum kontrol keamanan yang sudah diterapkan di Payment Gateway, plus apa yang masih jadi tanggung jawab operator (Anda) saat deploy.
+Dokumen ini merangkum kontrol keamanan yang sudah diterapkan di KetantechPay, plus apa yang masih jadi tanggung jawab operator (Anda) saat deploy.
 
 > Karena gateway ini adalah perantara transaksi finansial, security harus jadi pertimbangan utama. Audit ulang setiap kali ada perubahan besar.
+
+> 🛡️ **Audit terbaru:** [SECURITY-AUDIT-2026-05.md](./SECURITY-AUDIT-2026-05.md) — laporan lengkap OWASP Top 10 + PCI-DSS gap analysis (17 Mei 2026).
+
+## 🆕 Updates v1.1 (Mei 2026)
+
+| Hardening | Standard | File |
+|---|---|---|
+| **AES-256-GCM encryption-at-rest** untuk semua secret credentials | PCI-DSS req 3.4 | `src/utils/crypto.ts` |
+| **SSRF guard** — block private IP, AWS metadata, IPv6 ULA | OWASP A10 | `src/utils/ssrfGuard.ts` |
+| **Account lockout** — 10 failed attempts → 15 menit lockout per IP | PCI-DSS req 8.1.6 | `src/store/authAttemptStore.ts` |
+| **Audit log hash chain** (HMAC-SHA256) — tampering detection | PCI-DSS req 10.5 | `src/store/auditLogStore.ts` |
+| **Idempotency atomic claim** — fix race condition double-charge | OWASP A04 | `src/store/idempotencyStore.ts` |
+| **Zero CVE** dependencies (replace node-telegram-bot-api → telegraf, upgrade Express 4.22 / Next 15) | OWASP A06 | package.json |
+
 
 ## 1. Authentication & Authorization
 
@@ -50,17 +64,30 @@ Webhook adalah entry point dari luar (provider) yang mengubah state transaksi �
 5. **Terminal status protection** — webhook ke transaksi yang sudah `success`/`failed`/`expired`/`refunded` di-ignore (tidak bisa downgrade status).
 6. **Webhook rate limit** — 300 req/menit per IP (cegah flood/DoS).
 
-## 4. Rate Limiting
+## 4. Rate Limiting + Account Lockout (PCI-DSS req 8.1.6)
+
+**Per-IP rate limit (express-rate-limit):**
 
 | Scope | Default | Tujuan |
 |-------|---------|--------|
 | `/api/v1/payments/*` | 100 req/menit per IP (configurable) | Throttle abuse normal |
-| `/api/v1/admin/*` | 30 req/menit per IP (skip on success) | **Cegah brute force `ADMIN_API_KEY`** |
+| `/api/v1/admin/*` | 30 req/menit per IP (skip on success) | Cegah brute force `ADMIN_API_KEY` (layer 1) |
 | `/api/v1/webhooks/*` | 300 req/menit per IP | Cegah flood DoS |
 
-Untuk multi-instance production, swap `express-rate-limit` ke store Redis (`rate-limit-redis`) supaya counter share antar instance.
+**🆕 Account lockout (v1.1):** Layer 2 yang lebih kuat — tidak bisa di-bypass dengan IP rotation karena counter persistent di DB.
 
-## 5. Audit Trail
+| Setting | Default | Configurable via |
+|---|---|---|
+| Max failed attempts | 10 | `AUTH_MAX_FAILED_ATTEMPTS` (PCI-DSS strict: 6) |
+| Window | 15 menit | `AUTH_LOCKOUT_WINDOW_MS` |
+| Lockout duration | 15 menit | `AUTH_LOCKOUT_DURATION_MS` (PCI-DSS strict: 30 min = 1800000) |
+
+Per-IP + per-resource separation. Counter di-reset saat sukses auth. Audit log warning saat lockout triggered. Endpoint return 429 `LOCKED_OUT`.
+
+Untuk multi-instance production, swap `express-rate-limit` ke store Redis (`rate-limit-redis`) supaya counter share antar instance. `authAttemptStore` sudah di SQLite — kalau pakai PostgreSQL nanti, ikut migrate.
+
+
+## 5. Audit Trail dengan Hash Chain (PCI-DSS req 10.5)
 
 Operasi sensitif di catat di tabel `audit_logs`:
 
@@ -70,16 +97,31 @@ Operasi sensitif di catat di tabel `audit_logs`:
 | `admin.settings.update` | Snapshot before & after |
 | `admin.credentials.update` / `clear` | Provider + field name (TANPA value secret-nya) |
 | `admin.simulate-status` | Tx ID, status from→to (DEV-only endpoint) |
+| `telegram.refund` | Refund via Telegram bot (chat ID + username admin) |
+| `telegram.orderkuota.sync` | Sync trigger via bot |
 
 Akses via `GET /api/v1/admin/audit` dengan filter `action`, `targetId`, `limit`.
 
-⚠️ **SQLite tidak immutable.** Untuk produksi yang serius (compliance / forensic-ready), ship juga audit log ke storage append-only: S3 + Object Lock, AWS QLDB, atau service log dedicated.
+**🆕 Hash chain (v1.1):** Tiap entry punya `prev_hash` (hash entry sebelumnya) + `entry_hash` (HMAC-SHA256 dari content). Kalau attacker dengan DB write access menghapus/mengubah row, chain pecah & bisa di-detect via `auditLogStore.verifyChain()`. Master key untuk HMAC = `ENCRYPTION_KEY` (atau derived dari ADMIN_API_KEY).
 
-## 6. PII Handling
+⚠️ **SQLite tidak immutable.** Hash chain mendeteksi tampering tapi tidak mencegahnya. Untuk produksi yang serius (compliance / forensic-ready), ship juga audit log ke storage append-only: S3 + Object Lock, AWS QLDB, atau service log dedicated.
 
-- Logger Pino dikonfigurasi dengan **redaction** untuk: `customer.email`, `customer.phone`, `customer.name`, semua header secret (`X-Admin-Key`, `X-Client-Key`, `Authorization`, `Cookie`, `x-callback-token`, `Idempotency-Key`), dan provider credentials (`serverKey`, `secretKey`, `privateKey`, `apiKey`, `callbackToken`).
+
+## 6. PII Handling & Encryption-at-Rest (PCI-DSS req 3.4)
+
+- Logger Pino dikonfigurasi dengan **redaction** untuk: `customer.email`, `customer.phone`, `customer.name`, semua header secret (`X-Admin-Key`, `X-Client-Key`, `Authorization`, `Cookie`, `x-callback-token`, `Idempotency-Key`), provider credentials (`serverKey`, `secretKey`, `privateKey`, `apiKey`, `callbackToken`, `authToken`), Telegram tokens, dan OTP codes.
 - Audit log untuk credential update **hanya simpan provider+field**, tidak menyimpan value.
 - Endpoint dashboard `GET /admin/credentials` mengembalikan secret yang **dimask** (`********1234`).
+
+**🆕 Encryption at rest (v1.1):** Semua secret credentials (`serverKey`, `secretKey`, `apiKey`, `privateKey`, `callbackToken`, `authToken`) di SQLite di-encrypt dengan **AES-256-GCM**:
+- NIST-approved algorithm (AES-256, GCM authenticated encryption)
+- Random 96-bit IV per record (cegah pattern leak)
+- GCM auth tag (16 bytes) → tamper detection
+- Format storage: `enc:v1:<iv>:<tag>:<ciphertext>` (versioned untuk forward-compat)
+- Master key dari env `ENCRYPTION_KEY` (64 hex chars) atau scrypt KDF dari `ADMIN_API_KEY`
+
+Kalau attacker dapat akses ke `gateway.db` (mis. via SQL injection ke instance lain, atau backup file leak), credentials tetap encrypted — tidak readable tanpa master key.
+
 
 ## 7. HTTP Security Headers
 
@@ -121,19 +163,27 @@ Ini mencegah deploy tidak sengaja dengan default value yang tidak aman.
 Gateway tidak bisa cover semua. Operator (Anda) harus:
 
 - [ ] **HTTPS-only** — TLS termination di LB / reverse proxy (nginx/Cloudflare/ELB). Tidak boleh HTTP plain di production.
+- [ ] **`ENCRYPTION_KEY`** di-set ke 64 hex chars random (jangan rely on `ADMIN_API_KEY` derivation di production). Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 - [ ] **Network isolation** — kalau pakai `CLIENT_API_KEYS` kosong (mode terbuka), pastikan gateway tidak bisa diakses dari internet — hanya dari VPC private / cluster internal.
-- [ ] **Rotate secrets** secara berkala (`ADMIN_API_KEY`, `CLIENT_API_KEYS`, provider credentials).
-- [ ] **Monitoring & alerting** — alert jika audit log menunjukkan banyak `UNAUTHORIZED`, atau rate-limit hit tinggi.
-- [ ] **Backup database** harian — `gateway.db` mengandung transaksi finansial.
+- [ ] **Outbound network policy** — VPC security group / firewall block egress ke private IP ranges (defense in depth untuk SSRF).
+- [ ] **Rotate secrets** quarterly (`ADMIN_API_KEY`, `ENCRYPTION_KEY`, `CLIENT_API_KEYS`, provider credentials).
+- [ ] **Monitoring & alerting** — alert jika audit log menunjukkan banyak `UNAUTHORIZED`, `LOCKED_OUT`, atau rate-limit hit tinggi.
+- [ ] **Backup database** harian ke immutable storage (S3 + Object Lock) — `gateway.db` mengandung transaksi finansial + encrypted credentials.
 - [ ] **WAF / DDoS protection** di edge (Cloudflare, AWS WAF) untuk public-facing webhook endpoint.
 - [ ] **Patch management** — `npm audit`, `npm outdated` rutin, ikuti CVE advisory.
 - [ ] **PCI-DSS scope** — kalau ada credit card, gunakan tokenization dari provider; jangan pernah simpan PAN/CVV.
+- [ ] **Pentest tahunan** kalau target full PCI-DSS Level 1 certification (pakai QSA approved vendor).
+
 
 ## 12. Threat Model Singkat
 
 | Threat | Mitigasi |
 |--------|----------|
-| Brute force `ADMIN_API_KEY` | Rate limit 30/min + timing-safe compare + safety check di startup |
+| Brute force `ADMIN_API_KEY` | Rate limit 30/min + **account lockout 10 attempts/15min** + timing-safe compare + safety check di startup |
+| **SSRF via baseUrl override** | SSRF guard reject private IP, AWS metadata, IPv6 ULA |
+| **Credentials leak via DB file** | AES-256-GCM encryption-at-rest |
+| **Audit log tampering** | Hash chain HMAC-SHA256 (verifyChain) |
+| **Race condition double-charge** | Idempotency atomic claim (INSERT OR IGNORE) |
 | Replay attack (idempotency abuse) | Body-hash check, mismatch → 422 |
 | Webhook spoofing | Signature wajib + amount cross-check + dedup hash |
 | Status downgrade attack | Terminal status protection di webhookService |
@@ -155,8 +205,12 @@ Semua dijalankan di CI:
 - `tests/dokuTripayWebhook.test.ts` — DOKU/Tripay signature verify (6 tests)
 - `tests/refund.test.ts` — admin auth requirement (6 tests)
 - `tests/admin.test.ts` — admin auth requirement, settings persistence (15 tests)
+- 🆕 `tests/encryption.test.ts` — AES-256-GCM encryption/decryption, tampering detection (7 tests)
+- 🆕 `tests/ssrfGuard.test.ts` — SSRF guard IPv4/6 ranges, dev vs prod modes (15 tests)
+- 🆕 `tests/authLockout.test.ts` — account lockout PCI-DSS req 8.1.6 (8 tests)
 
-**Total: 74/74 passing.**
+**Total: 127/127 passing.**
+
 
 ## 14. Reporting Security Issue
 
