@@ -50,20 +50,27 @@ class IdempotencyStore {
     };
   }
 
-  begin(key: string, bodyHash?: string): void {
-    getDb()
+  /**
+   * Atomically claim an idempotency key.
+   * Return true kalau berhasil claim (caller harus proses request),
+   * false kalau key sudah dipakai (caller harus get() dulu).
+   *
+   * Pakai INSERT OR IGNORE supaya atomic — race condition antara dua
+   * request bersamaan dengan key sama tidak akan menyebabkan double-charge.
+   *
+   * Catatan: kalau entry expired (>24h TTL), get() akan release() dulu jadi
+   * caller bisa retry begin().
+   */
+  begin(key: string, bodyHash?: string): boolean {
+    const result = getDb()
       .prepare(
-        `INSERT INTO idempotency (key, status, body_hash, created_at)
-         VALUES (?, 'in_progress', ?, ?)
-         ON CONFLICT(key) DO UPDATE SET
-           status = 'in_progress',
-           body_hash = excluded.body_hash,
-           created_at = excluded.created_at,
-           response_status_code = NULL,
-           response_body_json = NULL`,
+        `INSERT OR IGNORE INTO idempotency (key, status, body_hash, created_at)
+         VALUES (?, 'in_progress', ?, ?)`,
       )
       .run(key, bodyHash ?? null, Date.now());
+    return (result.changes ?? 0) > 0;
   }
+
 
   complete(key: string, statusCode: number, body: unknown): void {
     getDb()

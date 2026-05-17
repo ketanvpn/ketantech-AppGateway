@@ -118,7 +118,14 @@ function initSchema(db: DatabaseSync): void {
   // Untuk DB lama (pre-existing), kita ALTER TABLE secara idempotent.
   addColumnIfMissing(db, "transactions", "payment_url", "TEXT");
   addColumnIfMissing(db, "transactions", "raw_response_json", "TEXT");
+
+  // Audit log integrity: hash chain untuk tamper detection.
+  // Tiap entry punya `prev_hash` (hash entry sebelumnya) + `entry_hash` (HMAC
+  // dari content + prev_hash). Kalau ada yang edit/delete row, chain pecah.
+  addColumnIfMissing(db, "audit_logs", "prev_hash", "TEXT");
+  addColumnIfMissing(db, "audit_logs", "entry_hash", "TEXT");
 }
+
 
 /**
  * Tambah kolom kalau belum ada. Idempotent — aman dipanggil tiap startup.

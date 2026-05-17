@@ -34,8 +34,22 @@ export const idempotencyMiddleware: RequestHandler = (req, res, next) => {
   // Hash body — pakai canonical JSON supaya order key tidak mempengaruhi.
   const bodyHash = hashCanonical(req.body);
 
-  const existing = idempotencyStore.get(key);
-  if (existing) {
+  // Atomic claim: INSERT OR IGNORE — kalau key sudah ada, return false.
+  // Ini mencegah race condition di mana dua request bersamaan dengan key
+  // yang sama bisa lewati check `existing` dan dua-duanya proses charge
+  // (= double-charge ke provider).
+  const claimed = idempotencyStore.begin(key, bodyHash);
+  if (!claimed) {
+    // Key sudah ada — periksa state-nya
+    const existing = idempotencyStore.get(key);
+    if (!existing) {
+      // Race: key di-release antara begin & get → retry safe untuk client
+      throw new GatewayError(
+        "IDEMPOTENCY_RACE",
+        "Idempotency key state berubah, silakan retry",
+        409,
+      );
+    }
     if (existing.bodyHash && existing.bodyHash !== bodyHash) {
       throw new GatewayError(
         "IDEMPOTENCY_KEY_MISMATCH",
@@ -56,7 +70,6 @@ export const idempotencyMiddleware: RequestHandler = (req, res, next) => {
     }
   }
 
-  idempotencyStore.begin(key, bodyHash);
 
   // Tangkap response untuk disimpan
   const originalJson = res.json.bind(res);

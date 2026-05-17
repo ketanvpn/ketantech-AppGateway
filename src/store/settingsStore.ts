@@ -1,6 +1,11 @@
 import { ProviderName } from "../types";
 import { config } from "../config";
 import { getDb } from "./db";
+import { encrypt, decrypt } from "../utils/crypto";
+import { logger } from "../utils/logger";
+import { validateProviderBaseUrl } from "../utils/ssrfGuard";
+
+
 
 const VALID_PROVIDERS: ProviderName[] = [
   "midtrans",
@@ -260,13 +265,33 @@ class SettingsStore {
   /**
    * Resolved credential — DB override (kalau ada) dengan fallback ke env.
    * Untuk dipakai provider saat charge / verify webhook.
+   *
+   * Secret fields (apiKey, secretKey, dst) di-stored AES-256-GCM encrypted.
+   * Saat read, otomatis di-decrypt. Legacy plaintext (sebelum encryption
+   * diaktifkan) masih bisa dibaca — akan di-encrypt saat next write.
    */
   getCredential(provider: ProviderName, field: CredentialField): string {
     this.ensureInit();
     const fromDb = this._credentials[provider]?.[field];
-    if (fromDb !== undefined) return fromDb;
+    if (fromDb !== undefined && fromDb !== "") {
+      if (SECRET_FIELDS.has(field)) {
+        try {
+          return decrypt(fromDb);
+        } catch (err) {
+          logger.error(
+            { provider, field, err: (err as Error).message },
+            "Failed to decrypt credential — possible tampering or wrong ENCRYPTION_KEY",
+          );
+          // Fallback ke env supaya gateway tidak break total kalau ada
+          // corruption di DB. Operator harus segera fix.
+          return readEnvCredential(provider, field);
+        }
+      }
+      return fromDb;
+    }
     return readEnvCredential(provider, field);
   }
+
 
   /**
    * Snapshot credentials untuk ditampilkan di dashboard.
@@ -324,6 +349,12 @@ class SettingsStore {
   /**
    * Set / hapus credential. Pass `value` empty string untuk hapus dari DB
    * (akan jatuh balik ke env).
+   *
+   * Security:
+   * - Secret fields (apiKey, secretKey, dst) di-encrypt AES-256-GCM sebelum
+   *   masuk DB (PCI-DSS req 3.4 — encryption at rest).
+   * - baseUrl di-validasi: hanya https/http public, BUKAN private IP /
+   *   localhost / cloud metadata endpoints (cegah SSRF — OWASP A10).
    */
   setCredential(
     provider: ProviderName,
@@ -334,6 +365,12 @@ class SettingsStore {
     if (!CREDENTIAL_FIELDS_BY_PROVIDER[provider].includes(field)) {
       throw new Error(`Field ${field} tidak valid untuk ${provider}`);
     }
+
+    // Validate baseUrl untuk cegah SSRF — provider HTTP call akan hit URL ini
+    if (field === "baseUrl" && value !== "") {
+      validateProviderBaseUrl(value);
+    }
+
     if (!this._credentials[provider]) this._credentials[provider] = {};
     if (value === "") {
       delete this._credentials[provider]![field];
@@ -341,10 +378,13 @@ class SettingsStore {
         delete this._credentials[provider];
       }
     } else {
-      this._credentials[provider]![field] = value;
+      // Encrypt at rest untuk secret fields
+      const stored = SECRET_FIELDS.has(field) ? encrypt(value) : value;
+      this._credentials[provider]![field] = stored;
     }
     this.persist(KEY_CREDENTIALS, this._credentials);
   }
+
 
 
   private persist(key: string, value: unknown): void {
