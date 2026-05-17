@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Admin dashboard untuk KetantechPay payment gateway",
   "private": true,
-
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
@@ -11,17 +10,22 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.15",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "next": "^15.5.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "20.16.5",
     "@types/react": "18.3.11",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.20",
-    "postcss": "8.4.47",
+    "postcss": "^8.5.14",
     "tailwindcss": "3.4.13",
     "typescript": "5.5.4"
+  },
+  "overrides": {
+    "postcss": "^8.5.14"
   }
 }
+
+

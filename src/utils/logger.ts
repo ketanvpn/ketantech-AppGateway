@@ -41,7 +41,19 @@ const REDACT_PATHS = [
   "privateKey",
   "callbackToken",
   "apiKey",
+  "authToken",
+  "password",
+  "token",
+
+  // Telegram bot token (kalau ke-spread accident)
+  "telegramBotToken",
+  "TELEGRAM_BOT_TOKEN",
+
+  // OTP code (sensitive temporary credential)
+  "otp",
+  "otpCode",
 ];
+
 
 export const logger = pino({
   level: config.logLevel,
