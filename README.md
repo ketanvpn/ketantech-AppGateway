@@ -12,6 +12,7 @@
 > 📦 Repo: <https://github.com/ketanvpn/ketantech-AppGateway>
 > 📘 [INTEGRATION.md](./INTEGRATION.md) — panduan integrasi ke aplikasi Anda
 > 🔒 [SECURITY.md](./SECURITY.md) — kontrol keamanan & tanggung jawab operator
+> 🗺️ [DEVELOPMENT-PLAN.md](./DEVELOPMENT-PLAN.md) — roadmap pengembangan & improvement
 
 
 ---
