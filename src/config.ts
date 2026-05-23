@@ -57,6 +57,7 @@ export const config = {
     dokuForceDown: process.env.DOKU_FORCE_DOWN === "true",
     tripayForceDown: process.env.TRIPAY_FORCE_DOWN === "true",
     orderkuotaForceDown: process.env.ORDERKUOTA_FORCE_DOWN === "true",
+    autogopayForceDown: process.env.AUTOGOPAY_FORCE_DOWN === "true",
   },
 
 
@@ -93,6 +94,16 @@ export const config = {
     username: process.env.ORDERKUOTA_USERNAME || "",
     authToken: process.env.ORDERKUOTA_AUTH_TOKEN || "",
     baseUrl: process.env.ORDERKUOTA_BASE_URL || "https://app.orderkuota.com/api/v2",
+  },
+
+  /**
+   * AutoGoPay — QRIS provider dengan webhook support.
+   * Auth via Bearer token (API Key).
+   * Reference: https://v1-gateway.autogopay.site/docs
+   */
+  autogopay: {
+    apiKey: process.env.AUTOGOPAY_API_KEY || "",
+    baseUrl: process.env.AUTOGOPAY_BASE_URL || "https://v1-gateway.autogopay.site",
   },
 };
 

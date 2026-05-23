@@ -4,6 +4,7 @@ import { XenditProvider } from "./xenditProvider";
 import { DokuProvider } from "./dokuProvider";
 import { TripayProvider } from "./tripayProvider";
 import { OrderKuotaProvider } from "./orderkuotaProvider";
+import { AutogopayProvider } from "./autogopayProvider";
 import { settingsStore } from "../store/settingsStore";
 
 const registry: Record<ProviderName, PaymentProvider> = {
@@ -12,6 +13,7 @@ const registry: Record<ProviderName, PaymentProvider> = {
   doku: new DokuProvider(),
   tripay: new TripayProvider(),
   orderkuota: new OrderKuotaProvider(),
+  autogopay: new AutogopayProvider(),
 };
 
 /** Daftar semua provider yang tersedia (untuk dashboard, dokumentasi, dll.) */
@@ -21,6 +23,7 @@ export const ALL_PROVIDER_NAMES: ProviderName[] = [
   "doku",
   "tripay",
   "orderkuota",
+  "autogopay",
 ];
 
 /**

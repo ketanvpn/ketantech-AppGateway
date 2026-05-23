@@ -1,4 +1,4 @@
-export type ProviderName = "midtrans" | "xendit" | "doku" | "tripay" | "orderkuota";
+export type ProviderName = "midtrans" | "xendit" | "doku" | "tripay" | "orderkuota" | "autogopay";
 
 
 export type PaymentMethod = "credit_card" | "bank_transfer" | "ewallet" | "qris";

@@ -2,7 +2,7 @@
 
 > **KetantechPay** by **Ketantech** — Gateway pembayaran multi-provider dengan auto-fallback, dashboard admin, dan integrasi siap pakai untuk Node, PHP, Python.
 
-[![Tests](https://img.shields.io/badge/tests-127%20passed-success)](#)
+[![Tests](https://img.shields.io/badge/tests-143%20passed-success)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](#)
 [![Mobile](https://img.shields.io/badge/dashboard-mobile%20friendly-violet)](#)
 [![Security](https://img.shields.io/badge/CVE-0-success)](#)
@@ -69,9 +69,10 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - Idempotency — cegah double-charge
 - Rate limiting berlapis (payments, admin, webhook)
 
-**5 Provider built-in:** Midtrans, Xendit, DOKU, Tripay, OrderKuota
-- 4 provider pertama via REST API resmi (signature verification untuk webhook)
+**6 Provider built-in:** Midtrans, Xendit, DOKU, Tripay, OrderKuota, AutoGoPay
+- 5 provider pertama via REST API resmi (signature verification untuk webhook)
 - OrderKuota: integrasi unofficial untuk QRIS dynamic + auto-poll mutasi (tidak ada webhook native)
+- AutoGoPay: QRIS provider dengan webhook support (https://v1-gateway.autogopay.site)
 
 **Security (PCI-DSS / OWASP Top 10 hardened):**
 - 🔐 **AES-256-GCM encryption-at-rest** untuk semua secret credentials di SQLite

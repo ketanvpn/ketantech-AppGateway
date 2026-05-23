@@ -7,7 +7,7 @@ Catatan untuk pengembangan ke depan. Aplikasi sudah siap untuk **single-tenant**
 ## Status Saat Ini (v1.0)
 
 ✅ **Production-ready untuk single-tenant:**
-- 5 provider built-in (Midtrans, Xendit, DOKU, Tripay, OrderKuota)
+- 6 provider built-in (Midtrans, Xendit, DOKU, Tripay, OrderKuota, AutoGoPay)
 - Auto-fallback + retry + idempotency
 - Dashboard admin (mobile-friendly)
 - 127 tests, security hardened (PCI-DSS reduced scope eligible)

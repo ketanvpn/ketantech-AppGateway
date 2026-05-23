@@ -13,6 +13,7 @@ const VALID_PROVIDERS: ProviderName[] = [
   "doku",
   "tripay",
   "orderkuota",
+  "autogopay",
 ];
 
 const isValid = (n: string): n is ProviderName =>
@@ -68,6 +69,7 @@ export const CREDENTIAL_FIELDS_BY_PROVIDER: Record<
   tripay: ["apiKey", "privateKey", "merchantCode", "baseUrl"],
   // OrderKuota tidak punya server key — pakai username + authToken (dari OTP login)
   orderkuota: ["username", "authToken", "baseUrl"],
+  autogopay: ["apiKey", "baseUrl"],
 };
 
 const SECRET_FIELDS: ReadonlySet<CredentialField> = new Set([
@@ -155,6 +157,7 @@ class SettingsStore {
         doku: config.mock.dokuForceDown,
         tripay: config.mock.tripayForceDown,
         orderkuota: config.mock.orderkuotaForceDown,
+        autogopay: config.mock.autogopayForceDown,
       };
       this.persist(KEY_FORCE_DOWN, this._forceDown);
     }

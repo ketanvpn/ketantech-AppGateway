@@ -3,7 +3,8 @@ export type ProviderName =
   | "xendit"
   | "doku"
   | "tripay"
-  | "orderkuota";
+  | "orderkuota"
+  | "autogopay";
 
 export const ALL_PROVIDERS: ProviderName[] = [
   "midtrans",
@@ -11,6 +12,7 @@ export const ALL_PROVIDERS: ProviderName[] = [
   "doku",
   "tripay",
   "orderkuota",
+  "autogopay",
 ];
 
 
@@ -103,6 +105,7 @@ export const FIELDS_BY_PROVIDER: Record<ProviderName, CredentialField[]> = {
   doku: ["clientId", "secretKey", "baseUrl"],
   tripay: ["apiKey", "privateKey", "merchantCode", "baseUrl"],
   orderkuota: ["username", "authToken", "baseUrl"],
+  autogopay: ["apiKey", "baseUrl"],
 };
 
 export const FIELD_LABELS: Record<CredentialField, string> = {
