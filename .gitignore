@@ -23,6 +23,11 @@ data/
 npm-debug.log*
 yarn-debug.log*
 
+# Local backups / deploy artifacts
+*.backup
+*.tar.gz
+*.tgz
+
 # Editor
 .DS_Store
 .vscode/
