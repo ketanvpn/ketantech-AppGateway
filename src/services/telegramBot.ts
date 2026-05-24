@@ -358,7 +358,7 @@ function setupCommands(b: Telegraf): void {
 
 async function sendMainMenu(ctx: Context): Promise<void> {
   if (!authorize(ctx)) return;
-  await ctx.reply(
+  await respond(ctx,
     `*KetantechPay Admin Panel*\n\n` +
       `Pilih menu di bawah. Command lama tetap bisa dipakai kalau butuh cepat.`,
     {
@@ -454,7 +454,7 @@ async function handleMenuCallback(ctx: Context, data: string): Promise<void> {
 }
 
 async function sendLastMenu(ctx: Context): Promise<void> {
-  await ctx.reply("Pilih jumlah transaksi terakhir:", {
+  await respond(ctx, "Pilih jumlah transaksi terakhir:", {
     reply_markup: {
       inline_keyboard: [
         [
@@ -479,7 +479,7 @@ async function sendProviderMenu(ctx: Context): Promise<void> {
       },
     ];
   });
-  await ctx.reply(
+  await respond(ctx,
     `*Provider Control*\n\n` +
       `Urutan fallback:\n${settings.providerOrder.map((p, i) => `${i + 1}. ${p}`).join("\n")}`,
     {
@@ -524,7 +524,7 @@ async function setProviderForceDownFromMenu(
 }
 
 async function sendCredentialsMenu(ctx: Context): Promise<void> {
-  await ctx.reply(
+  await respond(ctx,
     `*Credentials Manager* 🔐\n\n` +
       `Pilih provider. Nilai secret hanya ditampilkan masked. Untuk keamanan, input credential baru dikirim sebagai pesan berikutnya dan bisa dibatalkan dengan /cancel.`,
     {
@@ -553,7 +553,7 @@ async function sendCredentialProviderMenu(
     return `• *${field}* — ${status}: ${value}`;
   });
 
-  await ctx.reply(`*${providerLabel(provider)} Credentials*\n\n${lines.join("\n")}`, {
+  await respond(ctx, `*${providerLabel(provider)} Credentials*\n\n${lines.join("\n")}`, {
     parse_mode: "Markdown",
     reply_markup: {
       inline_keyboard: [
@@ -573,7 +573,7 @@ async function sendCredentialFieldMenu(
 ): Promise<void> {
   const item = settingsStore.credentialsSnapshot()[provider][field];
   const value = item.value ? `\`${escapeMarkdown(item.value)}\`` : "_not set_";
-  await ctx.reply(
+  await respond(ctx,
     `*${providerLabel(provider)} / ${field}*\n\n` +
       `Source: *${item.source}*\n` +
       `Current: ${value}\n\n` +
@@ -640,7 +640,7 @@ async function askRefundInput(ctx: Context): Promise<void> {
 
 async function sendHelp(ctx: Context): Promise<void> {
   if (!authorize(ctx)) return;
-  await ctx.reply(
+  await respond(ctx,
     `*KetantechPay Bot* 🤖\n\n` +
       `*Monitoring:*\n` +
       `/stats — Ringkasan transaksi hari ini\n` +
@@ -655,6 +655,7 @@ async function sendHelp(ctx: Context): Promise<void> {
       `/provider order <list> — Ubah urutan fallback\n` +
       `/provider enable <name> — Aktifkan provider\n` +
       `/provider disable <name> — Nonaktifkan provider\n\n` +
+      `/menu — Buka tombol admin panel\n` +
       `/help — Tampilkan menu ini\n\n` +
       `📢 Notifikasi otomatis aktif untuk: pembayaran sukses, gagal, refund, provider down.`,
     { parse_mode: "Markdown" },
@@ -683,13 +684,13 @@ async function sendStats(ctx: Context): Promise<void> {
     `Expired: ${counts.expired}\n` +
     `Refunded: ${counts.refunded}`;
 
-  await ctx.reply(msg, { parse_mode: "Markdown" });
+  await respond(ctx, msg, { parse_mode: "Markdown" });
 }
 
 async function sendLastTransactions(ctx: Context, n: number): Promise<void> {
   const all = transactionStore.list().slice(0, n);
   if (all.length === 0) {
-    await ctx.reply("Belum ada transaksi.");
+    await respond(ctx, "Belum ada transaksi.");
     return;
   }
   const lines = all.map((t, i) => {
@@ -703,7 +704,7 @@ async function sendLastTransactions(ctx: Context, n: number): Promise<void> {
       `   ${formatAmount(t.amount, t.currency)} · ${t.providerName} · ${time}`
     );
   });
-  await ctx.reply(
+  await respond(ctx,
     `*${n} Transaksi Terakhir*\n\n` + lines.join("\n\n"),
     { parse_mode: "Markdown" },
   );
@@ -723,7 +724,7 @@ async function sendHealth(ctx: Context): Promise<void> {
     const note = r.forceDown ? " (force-down)" : r.healthy ? "" : " — DOWN";
     return `${icon} *${r.name}*${note}`;
   });
-  await ctx.reply(`*Provider Health*\n\n` + lines.join("\n"), {
+  await respond(ctx, `*Provider Health*\n\n` + lines.join("\n"), {
     parse_mode: "Markdown",
   });
 }
@@ -970,7 +971,7 @@ async function sendSettings(ctx: Context): Promise<void> {
     `/provider disable <name>` +
     ` — Nonaktifkan provider`;
 
-  await ctx.reply(msg, { parse_mode: "Markdown" });
+  await respond(ctx, msg, { parse_mode: "Markdown" });
 }
 
 async function handleProviderCommand(
@@ -1134,6 +1135,26 @@ async function handleRestartConfirmation(
 // ════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════
+
+async function respond(
+  ctx: Context,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  if ("callbackQuery" in ctx && ctx.callbackQuery) {
+    try {
+      await (ctx as any).editMessageText(text, extra);
+      return;
+    } catch (err) {
+      const message = (err as Error).message || "";
+      // Telegram rejects editing when the content is identical. In that case,
+      // answering callback is enough; don't spam a new chat bubble.
+      if (message.includes("message is not modified")) return;
+      logger.warn({ err: message }, "Failed to edit Telegram menu message; falling back to reply");
+    }
+  }
+  await ctx.reply(text, extra as any);
+}
 
 function toProviderName(value: string | undefined): ProviderName | null {
   if (!value) return null;
