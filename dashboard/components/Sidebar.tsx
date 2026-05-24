@@ -26,6 +26,7 @@ const groups: Array<{
       { href: "/orderkuota", label: "OrderKuota", icon: <IconMobile /> },
       { href: "/settings", label: "Providers", icon: <IconSliders /> },
       { href: "/system", label: "System", icon: <IconWrench /> },
+      { href: "/telegram", label: "Telegram Bot", icon: <IconTelegram /> },
     ],
   },
   {
@@ -247,6 +248,13 @@ function IconBook() {
     <svg {...iconProps}>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+function IconTelegram() {
+  return (
+    <svg {...iconProps} fill="currentColor" stroke="none">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.61 3.73-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 4-1.74 6.68-2.88 8.03-3.44 3.82-1.59 4.62-1.87 5.14-1.88.11 0 .37.03.54.17.14.11.18.26.2.37.01.08.03.29.01.45z" />
     </svg>
   );
 }

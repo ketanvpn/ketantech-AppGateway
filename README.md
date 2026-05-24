@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-143%20passed-success)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](#)
 [![Mobile](https://img.shields.io/badge/dashboard-mobile%20friendly-violet)](#)
-[![Security](https://img.shields.io/badge/CVE-0-success)](#)
+[![Security](https://img.shields.io/badge/CVE-1%20moderate-yellow)](#)
 [![PCI-DSS](https://img.shields.io/badge/PCI--DSS-reduced%20scope-blue)](#)
 
 
@@ -89,7 +89,10 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - Helmet + CORS allowlist + trust-proxy aware
 - **0 CVE outstanding** (dependencies up-to-date)
 
-> 🛡️ Lihat [SECURITY-AUDIT-2026-05.md](./SECURITY-AUDIT-2026-05.md) untuk audit lengkap (OWASP Top 10 findings + PCI-DSS gap analysis)
+> 🛡️ Lihat audit reports:
+> - [SECURITY-AUDIT-2026-05.md](./SECURITY-AUDIT-2026-05.md) — Audit keamanan utama
+> - [SECURITY-AUDIT-2026-05-ADDENDUM.md](./SECURITY-AUDIT-2026-05-ADDENDUM.md) — Audit fitur reload/restart
+> - [COMPREHENSIVE-AUDIT-2026-05.md](./COMPREHENSIVE-AUDIT-2026-05.md) — Audit keseluruhan (Grade A - 92/100)
 
 
 **Operability:**
@@ -105,7 +108,7 @@ Bayangkan toko online Anda mau terima QRIS, transfer bank, dan e-wallet. Tanpa g
 - Audit log queryable lewat `/admin/audit`
 
 
-**Testing:** 127 tests dengan Jest + Supertest (termasuk 30 security tests untuk encryption, SSRF, lockout)
+**Testing:** 143 tests dengan Jest + Supertest (termasuk 30+ security tests untuk encryption, SSRF, lockout)
 
 
 ---
@@ -925,6 +928,6 @@ Internal use. PR / issue di <https://github.com/ketanvpn/ketantech-AppGateway>.
 
 ---
 
-**Build status:** 127 tests pass · TypeScript strict · Mobile-friendly dashboard · 0 CVE
+**Build status:** 143 tests pass · TypeScript strict · Mobile-friendly dashboard · 1 moderate CVE (uuid)
 
 

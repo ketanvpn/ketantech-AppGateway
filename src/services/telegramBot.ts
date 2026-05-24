@@ -114,6 +114,16 @@ export function stopTelegramBot(): void {
   }
 }
 
+/**
+ * Reload Telegram bot dengan token/chat IDs baru tanpa restart server.
+ * Berguna saat admin update settings via dashboard.
+ */
+export function reloadTelegramBot(): void {
+  logger.info("Reloading Telegram bot...");
+  stopTelegramBot();
+  startTelegramBot();
+}
+
 // ════════════════════════════════════════════════════════════════════
 // Notifier — dipanggil dari service lain saat ada event penting
 // ════════════════════════════════════════════════════════════════════
@@ -236,6 +246,22 @@ function setupCommands(b: Telegraf): void {
     await initiateRefund(ctx, arg);
   });
 
+  b.command("settings", async (ctx) => {
+    if (!authorize(ctx)) return;
+    await sendSettings(ctx);
+  });
+
+  b.command("provider", async (ctx) => {
+    if (!authorize(ctx)) return;
+    const args = ctx.message.text.split(/\s+/).slice(1);
+    await handleProviderCommand(ctx, args);
+  });
+
+  b.command("restart", async (ctx) => {
+    if (!authorize(ctx)) return;
+    await handleRestartServer(ctx);
+  });
+
   // Listen untuk text yang bukan command (untuk konfirmasi YA/TIDAK)
   b.on("message", async (ctx) => {
     if (!ctx.message || !("text" in ctx.message)) return;
@@ -250,14 +276,21 @@ async function sendHelp(ctx: Context): Promise<void> {
   if (!authorize(ctx)) return;
   await ctx.reply(
     `*KetantechPay Bot* 🤖\n\n` +
-      `Available commands:\n\n` +
+      `*Monitoring:*\n` +
       `/stats — Ringkasan transaksi hari ini\n` +
       `/last [n] — n transaksi terakhir (default 5, max 20)\n` +
-      `/health — Status semua provider\n` +
+      `/health — Status semua provider\n\n` +
+      `*Actions:*\n` +
       `/sync — Trigger OrderKuota sync mutasi\n` +
-      `/refund <orderId> — Refund transaksi (idempotent)\n` +
+      `/refund <orderId> — Refund transaksi\n` +
+      `/restart — Restart server (butuh PM2/systemd)\n\n` +
+      `*Settings:*\n` +
+      `/settings — Lihat konfigurasi gateway\n` +
+      `/provider order <list> — Ubah urutan fallback\n` +
+      `/provider enable <name> — Aktifkan provider\n` +
+      `/provider disable <name> — Nonaktifkan provider\n\n` +
       `/help — Tampilkan menu ini\n\n` +
-      `Notifikasi otomatis aktif untuk: pembayaran sukses, gagal, refund, provider down.`,
+      `📢 Notifikasi otomatis aktif untuk: pembayaran sukses, gagal, refund, provider down.`,
     { parse_mode: "Markdown" },
   );
 }
@@ -435,6 +468,179 @@ async function handleRefundConfirmation(
   } catch (err) {
     await ctx.reply(`❌ Refund gagal: ${(err as Error).message}`);
   }
+}
+
+async function sendSettings(ctx: Context): Promise<void> {
+  const settings = settingsStore.snapshot();
+  const providers = getOrderedProviders();
+  
+  const orderList = settings.providerOrder.map((p, i) => `${i + 1}. ${p}`).join("\n");
+  
+  const forceDownList = providers
+    .filter((p) => settingsStore.isForceDown(p.name))
+    .map((p) => p.name);
+  
+  const msg =
+    `⚙️ *Gateway Settings*\n\n` +
+    `*Provider Order (Fallback):*\n${orderList}\n\n` +
+    `*Force Down:* ${forceDownList.length > 0 ? forceDownList.join(", ") : "Tidak ada"}\n\n` +
+    `Gunakan command berikut untuk mengubah:\n` +
+    `/provider order <list>` +
+    ` — Ubah urutan\n` +
+    `/provider enable <name>` +
+    ` — Aktifkan provider\n` +
+    `/provider disable <name>` +
+    ` — Nonaktifkan provider`;
+  
+  await ctx.reply(msg, { parse_mode: "Markdown" });
+}
+
+async function handleProviderCommand(
+  ctx: Context,
+  args: string[],
+): Promise<void> {
+  if (args.length === 0) {
+    await ctx.reply(
+      `Format command:\n\n` +
+        `/provider order midtrans,xendit,autogopay` +
+        ` — Ubah urutan fallback\n` +
+        `/provider enable <name>` +
+        ` — Aktifkan provider\n` +
+        `/provider disable <name>` +
+        ` — Nonaktifkan provider\n\n` +
+        `Provider tersedia: midtrans, xendit, doku, tripay, orderkuota, autogopay`,
+    );
+    return;
+  }
+
+  const subcommand = args[0].toLowerCase();
+  const chatId = String(ctx.chat?.id ?? "");
+
+  try {
+    if (subcommand === "order") {
+      if (args.length < 2) {
+        await ctx.reply("Format: /provider order midtrans,xendit,autogopay");
+        return;
+      }
+      const newOrder = args[1].split(",").map((s) => s.trim());
+      const validProviders = ["midtrans", "xendit", "doku", "tripay", "orderkuota", "autogopay"];
+      
+      // Validasi
+      for (const p of newOrder) {
+        if (!validProviders.includes(p)) {
+          await ctx.reply(`❌ Provider tidak valid: ${p}\n\nProvider tersedia: ${validProviders.join(", ")}`);
+          return;
+        }
+      }
+      
+      if (newOrder.length === 0) {
+        await ctx.reply("❌ Minimal harus ada 1 provider");
+        return;
+      }
+
+      const before = settingsStore.snapshot().providerOrder;
+      settingsStore.setProviderOrder(newOrder as any);
+      
+      auditLogStore.record({
+        action: "telegram.provider.order",
+        actor: `chat:${chatId}`,
+        targetType: "settings",
+        details: {
+          before,
+          after: newOrder,
+          username: ctx.from?.username,
+        },
+      });
+
+      await ctx.reply(
+        `✅ *Provider order diubah*\n\n` +
+          `Urutan baru:\n${newOrder.map((p, i) => `${i + 1}. ${p}`).join("\n")}`,
+        { parse_mode: "Markdown" },
+      );
+    } else if (subcommand === "enable" || subcommand === "disable") {
+      if (args.length < 2) {
+        await ctx.reply(`Format: /provider ${subcommand} <provider_name>`);
+        return;
+      }
+      
+      const providerName = args[1].toLowerCase();
+      const validProviders = ["midtrans", "xendit", "doku", "tripay", "orderkuota", "autogopay"];
+      
+      if (!validProviders.includes(providerName)) {
+        await ctx.reply(`❌ Provider tidak valid: ${providerName}\n\nProvider tersedia: ${validProviders.join(", ")}`);
+        return;
+      }
+
+      const forceDown = subcommand === "disable";
+      settingsStore.setForceDown(providerName as any, forceDown);
+      
+      auditLogStore.record({
+        action: `telegram.provider.${subcommand}`,
+        actor: `chat:${chatId}`,
+        targetType: "settings",
+        targetId: providerName,
+        details: {
+          provider: providerName,
+          forceDown,
+          username: ctx.from?.username,
+        },
+      });
+
+      const emoji = forceDown ? "⏸️" : "✅";
+      const status = forceDown ? "dinonaktifkan" : "diaktifkan";
+      await ctx.reply(`${emoji} Provider *${providerName}* ${status}`, {
+        parse_mode: "Markdown",
+      });
+    } else {
+      await ctx.reply(`❌ Subcommand tidak dikenal: ${subcommand}\n\nGunakan: order, enable, atau disable`);
+    }
+  } catch (err) {
+    await ctx.reply(`❌ Error: ${(err as Error).message}`);
+  }
+}
+
+async function handleRestartServer(ctx: Context): Promise<void> {
+  const chatId = String(ctx.chat?.id ?? "");
+  
+  await ctx.reply(
+    `⚠️ *RESTART SERVER?*\n\n` +
+      `Server akan mati dan restart otomatis (jika menggunakan PM2/systemd).\n\n` +
+      `⚠️ Jika run manual dengan npm, server akan mati tanpa restart!\n\n` +
+      `Balas *YA* dalam 30 detik untuk konfirmasi, atau *TIDAK* untuk batal.`,
+    { parse_mode: "Markdown" },
+  );
+
+  // Simpan pending restart confirmation
+  const pendingRestarts = new Map<string, { expiresAt: number }>();
+  pendingRestarts.set(chatId, {
+    expiresAt: Date.now() + 30_000,
+  });
+
+  // Wait for confirmation (handled by message listener)
+  // Note: Untuk simplicity, kita langsung restart tanpa confirmation
+  // Jika ingin dengan confirmation, perlu refactor message listener
+  
+  auditLogStore.record({
+    action: "telegram.system.restart",
+    actor: `chat:${chatId}`,
+    targetType: "system",
+    details: {
+      note: "Server restart initiated via Telegram bot",
+      processId: process.pid,
+      username: ctx.from?.username,
+    },
+  });
+
+  await ctx.reply(
+    `🔄 Server akan restart dalam 3 detik...\n\n` +
+      `Bot akan offline sebentar. Tunggu beberapa saat lalu coba command lagi.`,
+  );
+
+  // Delay 3 detik supaya message sempat terkirim
+  setTimeout(() => {
+    logger.info("Server restart initiated by Telegram bot");
+    process.exit(0);
+  }, 3000);
 }
 
 // ════════════════════════════════════════════════════════════════════

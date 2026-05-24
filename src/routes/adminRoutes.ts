@@ -14,6 +14,7 @@ import { OrderKuotaProvider } from "../providers/orderkuotaProvider";
 import { syncOrderKuotaStatus } from "../services/orderkuotaSyncService";
 import { refundPayment } from "../services/refundService";
 import { GatewayError, PaymentStatus, ProviderName } from "../types";
+import { logger } from "../utils/logger";
 
 
 const asyncHandler =
@@ -386,6 +387,7 @@ const PROVIDER_ENUM = z.enum([
   "doku",
   "tripay",
   "orderkuota",
+  "autogopay",
 ]);
 
 
@@ -593,6 +595,145 @@ adminRoutes.get(
     const targetId = req.query.targetId ? String(req.query.targetId) : undefined;
     const data = auditLogStore.list({ limit, action, targetId });
     res.json({ data, total: auditLogStore.count() });
+  }),
+);
+
+/**
+ * GET /api/v1/admin/telegram
+ *
+ * Get Telegram bot configuration (token & chat IDs masked for security)
+ */
+adminRoutes.get(
+  "/telegram",
+  asyncHandler(async (_req, res) => {
+    // Read from env (default source)
+    const envToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const envChatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS || "").trim();
+    
+    // Mask token untuk keamanan (tampilkan 8 karakter terakhir saja)
+    const tokenMasked = envToken ? `***${envToken.slice(-8)}` : "";
+    
+    const chatIdList = envChatIds
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    res.json({
+      data: {
+        botToken: tokenMasked,
+        botTokenSet: Boolean(envToken),
+        adminChatIds: chatIdList,
+        enabled: Boolean(envToken) && chatIdList.length > 0,
+        source: "env",
+      },
+    });
+  }),
+);
+
+const telegramUpdateSchema = z.object({
+  botToken: z.string().min(1).max(500).optional(),
+  adminChatIds: z.string().max(500).optional(),
+});
+
+/**
+ * PATCH /api/v1/admin/telegram
+ *
+ * Update Telegram bot configuration
+ * Note: Perubahan memerlukan restart server untuk apply
+ */
+adminRoutes.patch(
+  "/telegram",
+  asyncHandler(async (req, res) => {
+    const { botToken, adminChatIds } = telegramUpdateSchema.parse(req.body);
+
+    // Untuk saat ini, kita hanya bisa baca dari env
+    // Update harus dilakukan manual di .env file
+    // TODO: Implement DB storage untuk telegram settings jika diperlukan
+
+    recordAudit(req, {
+      action: "admin.telegram.update.attempted",
+      targetType: "telegram",
+      details: {
+        note: "Telegram settings harus diubah di .env file dan restart server",
+        botTokenProvided: botToken !== undefined,
+        chatIdsProvided: adminChatIds !== undefined,
+      },
+    });
+
+    res.status(501).json({
+      error: "NOT_IMPLEMENTED",
+      message: "Untuk mengubah Telegram settings, edit file .env dan restart server. Fitur update via dashboard akan ditambahkan di versi mendatang.",
+      instructions: {
+        step1: "Edit file .env di root project",
+        step2: "Set TELEGRAM_BOT_TOKEN=<your_bot_token>",
+        step3: "Set TELEGRAM_ADMIN_CHAT_IDS=<chat_id1>,<chat_id2>",
+        step4: "Restart server dengan: npm run dev atau npm start",
+      },
+    });
+  }),
+);
+
+/**
+ * POST /api/v1/admin/telegram/reload
+ *
+ * Reload Telegram bot dengan settings baru dari .env tanpa restart server.
+ * Berguna setelah admin edit .env file.
+ */
+adminRoutes.post(
+  "/telegram/reload",
+  asyncHandler(async (req, res) => {
+    const { reloadTelegramBot } = await import("../services/telegramBot");
+    
+    reloadTelegramBot();
+    
+    recordAudit(req, {
+      action: "admin.telegram.reload",
+      targetType: "telegram",
+      details: {
+        note: "Telegram bot reloaded with new settings from .env",
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Telegram bot berhasil di-reload dengan settings baru dari .env",
+    });
+  }),
+);
+
+/**
+ * POST /api/v1/admin/system/restart
+ *
+ * Restart server (memerlukan process manager seperti PM2 atau systemd).
+ * Endpoint ini akan terminate process dengan exit code 0, dan process manager
+ * akan otomatis restart.
+ *
+ * PENTING: Hanya berfungsi jika server dijalankan dengan process manager!
+ * Jika run manual dengan `node` atau `npm start`, server akan mati tanpa restart.
+ */
+adminRoutes.post(
+  "/system/restart",
+  asyncHandler(async (req, res) => {
+    recordAudit(req, {
+      action: "admin.system.restart",
+      targetType: "system",
+      details: {
+        note: "Server restart initiated via dashboard",
+        processId: process.pid,
+      },
+    });
+
+    // Kirim response dulu sebelum restart
+    res.json({
+      success: true,
+      message: "Server akan restart dalam 2 detik. Tunggu beberapa saat lalu refresh halaman.",
+    });
+
+    // Delay 2 detik supaya response sempat terkirim
+    setTimeout(() => {
+      logger.info("Server restart initiated by admin");
+      process.exit(0);
+    }, 2000);
   }),
 );
 
