@@ -183,22 +183,3 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
-
-/**
- * Logout button component
- */
-export function LogoutButton({ action }: { action?: React.ReactNode }) {
-  return (
-    <button
-      onClick={() => {
-        if (confirm("Logout dari dashboard?")) {
-          localStorage.removeItem("adminKey");
-          window.location.reload();
-        }
-      }}
-      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-400 transition hover:bg-white/5 hover:text-white"
-    >
-      {action}
-    </button>
-  );
-}

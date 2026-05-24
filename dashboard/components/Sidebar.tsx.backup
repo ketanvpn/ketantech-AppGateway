@@ -163,7 +163,6 @@ function Logo() {
   );
 }
 
-
 const iconProps = {
   className: "h-4 w-4",
   viewBox: "0 0 24 24",
@@ -173,6 +172,7 @@ const iconProps = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
+
 function IconDashboard() {
   return (
     <svg {...iconProps}>
