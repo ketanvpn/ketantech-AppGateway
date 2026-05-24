@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { PaymentMethod, Transaction } from "@/lib/types";
@@ -45,6 +45,25 @@ export default function TestChargePage() {
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (!result || result.status !== "pending") return;
+
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await api.getTransaction(result.id);
+        if (!cancelled) setResult(latest);
+      } catch (e: any) {
+        if (!cancelled) setError(e.message);
+      }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [result?.id, result?.status]);
 
   return (
     <div className="space-y-6">
@@ -157,6 +176,11 @@ export default function TestChargePage() {
               <div className="text-xs text-slate-500">
                 Attempts: {result.attempts.length}
               </div>
+              {result.status === "pending" && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  Menunggu pembayaran… status dicek otomatis tiap 3 detik.
+                </div>
+              )}
               <Link
                 href={`/transactions/${result.id}`}
                 className="inline-block text-sm font-medium text-brand-600 hover:text-brand-700"

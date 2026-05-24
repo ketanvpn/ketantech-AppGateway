@@ -28,7 +28,7 @@ export class AutogopayProvider implements PaymentProvider {
 
   async isHealthy(): Promise<boolean> {
     if (settingsStore.isForceDown("autogopay")) return false;
-    
+
     const apiKey = settingsStore.getCredential("autogopay", "apiKey");
     if (!apiKey) return false;
 
@@ -239,7 +239,12 @@ export class AutogopayProvider implements PaymentProvider {
       );
     }
 
-    return this.mapStatus(json.data.transaction_status);
+    return this.mapStatus(
+      json.data.transaction_status ||
+        json.data.status ||
+        json.data.transaction?.transaction_status ||
+        json.data.transaction?.status,
+    );
   }
 
   /**
@@ -250,11 +255,20 @@ export class AutogopayProvider implements PaymentProvider {
     rawBody: Buffer,
     headers: Record<string, string | undefined>,
   ): boolean {
-    const signature = headers["x-signature"];
-    if (!signature) {
+    const signatureHeader =
+      headers["x-signature"] ||
+      headers["x-autogopay-signature"] ||
+      headers["x-callback-signature"] ||
+      headers["signature"] ||
+      "";
+
+    if (!signatureHeader) {
       logger.warn(
-        { provider: this.name },
-        "Webhook missing X-Signature header",
+        {
+          provider: this.name,
+          headerKeys: Object.keys(headers).filter((h) => h.includes("sign")),
+        },
+        "Webhook missing signature header",
       );
       return false;
     }
@@ -263,60 +277,100 @@ export class AutogopayProvider implements PaymentProvider {
     if (!apiKey) {
       logger.warn(
         { provider: this.name },
-        "Cannot verify webhook: API key not configured",
-      );
-      // Di production strict mode, reject webhook kalau key kosong
-      if (config.nodeEnv === "production") return false;
-      // Di dev, allow (untuk testing manual)
-      return true;
-    }
-
-    // Compute expected signature: HMAC-SHA256(rawBody, apiKey)
-    const expected = createHmac("sha256", apiKey)
-      .update(rawBody)
-      .digest("hex");
-
-    // Timing-safe comparison untuk mencegah timing attack
-    try {
-      return timingSafeEqual(
-        Buffer.from(signature, "hex"),
-        Buffer.from(expected, "hex"),
-      );
-    } catch {
-      // Length mismatch atau format invalid
-      logger.warn(
-        { provider: this.name, signatureLength: signature.length },
-        "Webhook signature format invalid",
+        "Cannot verify webhook: AutoGoPay API key not configured",
       );
       return false;
     }
+
+    // AutoGoPay docs mention HMAC-SHA256 using API key. Support common encodings:
+    // - raw hex digest
+    // - sha256=<hex>
+    // - base64 digest
+    const provided = signatureHeader.trim().replace(/^sha256=/i, "");
+    const expectedHex = createHmac("sha256", apiKey)
+      .update(rawBody)
+      .digest("hex");
+    const expectedBase64 = createHmac("sha256", apiKey)
+      .update(rawBody)
+      .digest("base64");
+
+    const matches = (a: string, b: string): boolean => {
+      const ab = Buffer.from(a, "utf8");
+      const bb = Buffer.from(b, "utf8");
+      if (ab.length !== bb.length) return false;
+      return timingSafeEqual(ab, bb);
+    };
+
+    const ok = matches(provided, expectedHex) || matches(provided, expectedBase64);
+    if (!ok) {
+      logger.warn(
+        {
+          provider: this.name,
+          signatureLength: provided.length,
+          hasKnownSignatureHeader: Boolean(signatureHeader),
+        },
+        "Webhook signature mismatch",
+      );
+    }
+    return ok;
   }
 
   parseWebhook(payload: Record<string, unknown>): WebhookEvent {
-    const event = payload.event as string;
-    const transaction = payload.transaction as Record<string, any>;
+    // AutoGoPay webhook bisa punya berbagai format:
+    // 1. { event: "...", transaction: { id, status, ... } }
+    // 2. { transaction_id, transaction_status, ... } (flat)
+    // 3. Test payload dari dashboard (bisa berbeda)
+
+    let transaction = payload.transaction as Record<string, any> | undefined;
+
+    // AutoGoPay webhook production format:
+    // { event: "transaction.received", transaction: { transaction_id, order_id, status: "PAID", ... } }
+    // Normalisasi ke bentuk internal { id, status, order_id }.
+    if (transaction) {
+      transaction = {
+        ...transaction,
+        id: transaction.id || transaction.transaction_id,
+        status: transaction.status || transaction.transaction_status,
+      };
+    }
+
+    // Fallback: cek apakah payload sendiri adalah transaction (flat format)
+    if (!transaction || !transaction.id) {
+      const txId = payload.transaction_id || payload.id;
+      const txStatus = payload.transaction_status || payload.status;
+
+      if (txId) {
+        transaction = {
+          id: txId,
+          status: txStatus || "pending",
+          order_id: payload.order_id || txId,
+        };
+      }
+    }
 
     if (!transaction || !transaction.id) {
+      logger.warn(
+        { provider: this.name, payload },
+        "Webhook payload format tidak dikenali",
+      );
       throw new ProviderError(
         this.name,
-        "Webhook payload missing transaction data",
+        "AutoGoPay webhook payload format tidak dikenali",
         false,
       );
     }
 
     // AutoGoPay webhook event: "transaction.received"
-    // Status bisa: pending, settlement, expire, cancel
-    const status = this.mapStatus(transaction.status);
+    // Status bisa: pending, PAID, settlement, expire, cancel
+    const status = this.mapStatus(String(transaction.status || "pending"));
 
-    // AutoGoPay tidak mengirim orderId merchant di webhook (karena order_id
-    // adalah auto-generated oleh mereka). Kita perlu lookup dari DB by
-    // providerTransactionId untuk dapat orderId asli.
-    // Untuk sementara, gunakan transaction.id sebagai fallback.
-    const orderId = (transaction.order_id as string) || transaction.id;
+    // AutoGoPay tidak mengirim orderId merchant di webhook (order_id adalah
+    // auto-generated oleh AutoGoPay). Lookup utama tetap by providerTransactionId.
+    const orderId = String(transaction.order_id || transaction.id);
 
     return {
       orderId,
-      providerTransactionId: transaction.id,
+      providerTransactionId: String(transaction.id),
       status,
       rawPayload: payload,
     };
@@ -329,13 +383,18 @@ export class AutogopayProvider implements PaymentProvider {
   private mapStatus(status: string): PaymentStatus {
     const normalized = (status || "").toLowerCase();
     switch (normalized) {
+      case "paid":
       case "settlement":
+      case "success":
         return "success";
       case "pending":
         return "pending";
       case "expire":
+      case "expired":
         return "expired";
       case "cancel":
+      case "cancelled":
+      case "failed":
         return "failed";
       default:
         logger.warn(

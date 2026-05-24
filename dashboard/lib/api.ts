@@ -325,8 +325,8 @@ export const api = {
 
 
   /**
-   * Test charge — pakai endpoint publik /api/v1/payments/charge.
-   * Tidak butuh admin key, tapi butuh idempotency-key.
+   * Test charge dari dashboard — pakai admin endpoint supaya tidak perlu input
+   * X-Client-Key manual di UI. Integrasi eksternal tetap pakai /payments/charge.
    */
   async testCharge(payload: {
     orderId: string;
@@ -336,24 +336,13 @@ export const api = {
     customer: { name: string; email: string; phone?: string };
     description?: string;
   }): Promise<Transaction> {
-    const base = getApiBase();
-    const idempotencyKey = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const res = await fetch(`${base}/api/v1/payments/charge`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
+    const r = await adminFetch<{ data: Transaction }>(
+      "/api/v1/admin/test-charge",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    if (!res.ok) {
-      throw new ApiError(
-        res.status,
-        body.error || "REQUEST_FAILED",
-        body.message || res.statusText,
-      );
-    }
-    return body.data;
+    );
+    return r.data;
   },
 };

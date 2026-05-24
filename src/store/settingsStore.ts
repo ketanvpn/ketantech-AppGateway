@@ -485,3 +485,48 @@ function readEnvCredential(
 }
 
 
+
+/**
+ * Telegram bot settings
+ */
+const KEY_TELEGRAM = "telegram";
+
+export interface TelegramSettings {
+  botToken?: string;
+  adminChatIds?: string[];
+}
+
+export function getTelegramSettings(): TelegramSettings {
+  const db = getDb();
+  const row = db.prepare("SELECT value_json FROM settings WHERE key = ?").get(KEY_TELEGRAM) as { value_json: string } | undefined;
+
+  if (!row) return {};
+
+  try {
+    const parsed = JSON.parse(row.value_json) as TelegramSettings;
+    // Decrypt bot token jika ada
+    if (parsed.botToken) {
+      parsed.botToken = decrypt(parsed.botToken);
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+export function setTelegramSettings(settings: TelegramSettings): void {
+  const db = getDb();
+
+  // Encrypt bot token sebelum simpan
+  const toStore: TelegramSettings = { ...settings };
+  if (toStore.botToken) {
+    toStore.botToken = encrypt(toStore.botToken);
+  }
+
+  db.prepare(
+    `INSERT INTO settings (key, value_json) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json`
+  ).run(KEY_TELEGRAM, JSON.stringify(toStore));
+
+  logger.info("Telegram settings updated in database");
+}

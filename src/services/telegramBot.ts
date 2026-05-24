@@ -47,12 +47,26 @@ const pendingRefunds = new Map<
 const REFUND_CONFIRM_TIMEOUT_MS = 30_000;
 
 function getEnv(): { token: string; chatIds: string[]; enabled: boolean } {
-  const token = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS || "")
+  // Priority: DB settings > ENV
+  const { getTelegramSettings } = require("../store/settingsStore");
+  const dbSettings = getTelegramSettings();
+
+  const envToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  const envChatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS || "")
     .split(",")
-    .map((s) => s.trim())
+    .map((s: string) => s.trim())
     .filter(Boolean);
-  const enabled = Boolean(token) && chatIds.length > 0;
+
+  const token = dbSettings.botToken || envToken;
+  const chatIds = dbSettings.adminChatIds || envChatIds;
+  const enabled = Boolean(token && chatIds.length > 0);
+
+  if (!enabled) {
+    logger.info(
+      "Telegram bot disabled (set TELEGRAM_BOT_TOKEN + TELEGRAM_ADMIN_CHAT_IDS in .env or update via dashboard)",
+    );
+  }
+
   return { token, chatIds, enabled };
 }
 
@@ -112,6 +126,10 @@ export function stopTelegramBot(): void {
     notificationsEnabled = false;
     logger.info("Telegram bot stopped");
   }
+}
+
+export function getTelegramBot(): Telegraf | null {
+  return bot;
 }
 
 /**
@@ -473,13 +491,13 @@ async function handleRefundConfirmation(
 async function sendSettings(ctx: Context): Promise<void> {
   const settings = settingsStore.snapshot();
   const providers = getOrderedProviders();
-  
+
   const orderList = settings.providerOrder.map((p, i) => `${i + 1}. ${p}`).join("\n");
-  
+
   const forceDownList = providers
     .filter((p) => settingsStore.isForceDown(p.name))
     .map((p) => p.name);
-  
+
   const msg =
     `⚙️ *Gateway Settings*\n\n` +
     `*Provider Order (Fallback):*\n${orderList}\n\n` +
@@ -491,7 +509,7 @@ async function sendSettings(ctx: Context): Promise<void> {
     ` — Aktifkan provider\n` +
     `/provider disable <name>` +
     ` — Nonaktifkan provider`;
-  
+
   await ctx.reply(msg, { parse_mode: "Markdown" });
 }
 
@@ -524,7 +542,7 @@ async function handleProviderCommand(
       }
       const newOrder = args[1].split(",").map((s) => s.trim());
       const validProviders = ["midtrans", "xendit", "doku", "tripay", "orderkuota", "autogopay"];
-      
+
       // Validasi
       for (const p of newOrder) {
         if (!validProviders.includes(p)) {
@@ -532,7 +550,7 @@ async function handleProviderCommand(
           return;
         }
       }
-      
+
       if (newOrder.length === 0) {
         await ctx.reply("❌ Minimal harus ada 1 provider");
         return;
@@ -540,7 +558,7 @@ async function handleProviderCommand(
 
       const before = settingsStore.snapshot().providerOrder;
       settingsStore.setProviderOrder(newOrder as any);
-      
+
       auditLogStore.record({
         action: "telegram.provider.order",
         actor: `chat:${chatId}`,
@@ -562,10 +580,10 @@ async function handleProviderCommand(
         await ctx.reply(`Format: /provider ${subcommand} <provider_name>`);
         return;
       }
-      
+
       const providerName = args[1].toLowerCase();
       const validProviders = ["midtrans", "xendit", "doku", "tripay", "orderkuota", "autogopay"];
-      
+
       if (!validProviders.includes(providerName)) {
         await ctx.reply(`❌ Provider tidak valid: ${providerName}\n\nProvider tersedia: ${validProviders.join(", ")}`);
         return;
@@ -573,7 +591,7 @@ async function handleProviderCommand(
 
       const forceDown = subcommand === "disable";
       settingsStore.setForceDown(providerName as any, forceDown);
-      
+
       auditLogStore.record({
         action: `telegram.provider.${subcommand}`,
         actor: `chat:${chatId}`,
@@ -601,7 +619,7 @@ async function handleProviderCommand(
 
 async function handleRestartServer(ctx: Context): Promise<void> {
   const chatId = String(ctx.chat?.id ?? "");
-  
+
   await ctx.reply(
     `⚠️ *RESTART SERVER?*\n\n` +
       `Server akan mati dan restart otomatis (jika menggunakan PM2/systemd).\n\n` +
@@ -619,7 +637,7 @@ async function handleRestartServer(ctx: Context): Promise<void> {
   // Wait for confirmation (handled by message listener)
   // Note: Untuk simplicity, kita langsung restart tanpa confirmation
   // Jika ingin dengan confirmation, perlu refactor message listener
-  
+
   auditLogStore.record({
     action: "telegram.system.restart",
     actor: `chat:${chatId}`,

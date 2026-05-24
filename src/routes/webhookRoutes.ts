@@ -1,7 +1,9 @@
 import { Router, RequestHandler, raw } from "express";
+import { createHmac } from "crypto";
 import { getProvider } from "../providers";
 import { processWebhook } from "../services/webhookService";
 import { hashPayload, webhookEventStore } from "../store/webhookEventStore";
+import { settingsStore } from "../store/settingsStore";
 import { GatewayError, ProviderName } from "../types";
 import { logger } from "../utils/logger";
 
@@ -39,6 +41,13 @@ webhookRoutes.post(
       throw new GatewayError("INVALID_BODY", "Empty webhook body", 400);
     }
 
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody.toString("utf-8"));
+    } catch {
+      throw new GatewayError("INVALID_JSON", "Webhook body is not valid JSON", 400);
+    }
+
     // Normalisasi headers ke lowercase
     const headers: Record<string, string | undefined> = {};
     for (const [k, v] of Object.entries(req.headers)) {
@@ -55,11 +64,36 @@ webhookRoutes.post(
       );
     }
 
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(rawBody.toString("utf-8"));
-    } catch {
-      throw new GatewayError("INVALID_JSON", "Webhook body is not valid JSON", 400);
+    // AutoGoPay melakukan verifikasi callback dengan challenge payload:
+    // { event: "verification.challenge", challenge: "..." }
+    // Ini bukan transaksi, tapi tetap harus lolos signature verification dulu.
+    if (
+      providerName === "autogopay" &&
+      payload.event === "verification.challenge"
+    ) {
+      const challenge = String(payload.challenge || "");
+      const apiKey = settingsStore.getCredential("autogopay", "apiKey");
+      const challengeSignature = apiKey
+        ? createHmac("sha256", apiKey).update(challenge).digest("hex")
+        : "";
+
+      logger.info(
+        { provider: providerName, hasChallengeSignature: Boolean(challengeSignature) },
+        "AutoGoPay webhook verification challenge accepted",
+      );
+
+      if (challengeSignature) {
+        res.setHeader("X-Signature", challengeSignature);
+      }
+      res.status(200).json({
+        success: true,
+        message: "Callback verified",
+        event: "verification.challenge",
+        challenge,
+        signature: challengeSignature,
+        challenge_response: challengeSignature,
+      });
+      return;
     }
 
     // Strict dedup: kalau body persis sama pernah diterima, skip pemrosesan.
@@ -80,6 +114,16 @@ webhookRoutes.post(
     }
 
     const event = provider.parseWebhook(payload);
+    logger.info(
+      {
+        provider: providerName,
+        orderId: event.orderId,
+        providerTxId: event.providerTransactionId,
+        status: event.status,
+      },
+      "webhook parsed event"
+    );
+
     const result = await processWebhook(providerName, event);
 
     // Catat event setelah pemrosesan; gunakan insertIfNew untuk handle race

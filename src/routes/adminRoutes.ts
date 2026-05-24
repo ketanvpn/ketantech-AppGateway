@@ -13,6 +13,7 @@ import { getOrderedProviders } from "../providers";
 import { OrderKuotaProvider } from "../providers/orderkuotaProvider";
 import { syncOrderKuotaStatus } from "../services/orderkuotaSyncService";
 import { refundPayment } from "../services/refundService";
+import { chargePayment } from "../services/paymentService";
 import { GatewayError, PaymentStatus, ProviderName } from "../types";
 import { logger } from "../utils/logger";
 
@@ -30,6 +31,28 @@ export const adminRoutes = Router();
 adminRoutes.use(adminRateLimiter);
 adminRoutes.use(adminAuth);
 
+const adminTestChargeSchema = z.object({
+  orderId: z.string().min(1).max(64),
+  amount: z.number().positive().int(),
+  currency: z.string().length(3),
+  method: z.enum(["credit_card", "bank_transfer", "ewallet", "qris"]),
+  customer: z.object({
+    name: z.string().min(1).max(120),
+    email: z.string().email().max(160),
+    phone: z.string().max(32).optional(),
+  }),
+  description: z.string().max(255).optional(),
+});
+
+/** POST /api/v1/admin/test-charge - dashboard-only charge test. */
+adminRoutes.post(
+  "/test-charge",
+  asyncHandler(async (req, res) => {
+    const parsed = adminTestChargeSchema.parse(req.body);
+    const record = await chargePayment(parsed);
+    res.status(201).json({ data: record });
+  }),
+);
 
 /** GET /api/v1/admin/stats - dashboard summary */
 adminRoutes.get(
@@ -599,75 +622,102 @@ adminRoutes.get(
 );
 
 /**
+/**
  * GET /api/v1/admin/telegram
  *
- * Get Telegram bot configuration (token & chat IDs masked for security)
+ * Baca konfigurasi Telegram bot saat ini.
  */
 adminRoutes.get(
   "/telegram",
   asyncHandler(async (_req, res) => {
-    // Read from env (default source)
+    const { getTelegramBot } = await import("../services/telegramBot");
+    const { getTelegramSettings } = await import("../store/settingsStore");
+
+    const bot = getTelegramBot();
+    const dbSettings = getTelegramSettings();
+
+    // Priority: DB settings > ENV
     const envToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-    const envChatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS || "").trim();
-    
-    // Mask token untuk keamanan (tampilkan 8 karakter terakhir saja)
-    const tokenMasked = envToken ? `***${envToken.slice(-8)}` : "";
-    
-    const chatIdList = envChatIds
+    const envChatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS || "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const botToken = dbSettings.botToken || envToken;
+    const adminChatIds = dbSettings.adminChatIds || envChatIds;
+    const enabled = Boolean(botToken && adminChatIds.length > 0);
+    const source = dbSettings.botToken ? "db" : "env";
+
     res.json({
       data: {
-        botToken: tokenMasked,
-        botTokenSet: Boolean(envToken),
-        adminChatIds: chatIdList,
-        enabled: Boolean(envToken) && chatIdList.length > 0,
-        source: "env",
+        botToken: botToken ? "***" : "",
+        botTokenSet: Boolean(botToken),
+        adminChatIds,
+        enabled,
+        source,
       },
     });
   }),
 );
 
 const telegramUpdateSchema = z.object({
-  botToken: z.string().min(1).max(500).optional(),
-  adminChatIds: z.string().max(500).optional(),
+  botToken: z.string().optional(),
+  adminChatIds: z.string().optional(),
 });
 
 /**
  * PATCH /api/v1/admin/telegram
  *
- * Update Telegram bot configuration
- * Note: Perubahan memerlukan restart server untuk apply
+ * Update Telegram settings dan simpan ke database.
+ * Bot akan di-reload otomatis dengan settings baru.
  */
 adminRoutes.patch(
   "/telegram",
   asyncHandler(async (req, res) => {
     const { botToken, adminChatIds } = telegramUpdateSchema.parse(req.body);
+    const { getTelegramSettings, setTelegramSettings } = await import("../store/settingsStore");
+    const { reloadTelegramBot } = await import("../services/telegramBot");
 
-    // Untuk saat ini, kita hanya bisa baca dari env
-    // Update harus dilakukan manual di .env file
-    // TODO: Implement DB storage untuk telegram settings jika diperlukan
+    // Ambil settings lama
+    const currentSettings = getTelegramSettings();
+
+    // Update settings baru
+    const newSettings: any = { ...currentSettings };
+
+    if (botToken !== undefined) {
+      newSettings.botToken = botToken.trim() || undefined;
+    }
+
+    if (adminChatIds !== undefined) {
+      const chatIdArray = adminChatIds
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      newSettings.adminChatIds = chatIdArray.length > 0 ? chatIdArray : undefined;
+    }
+
+    // Simpan ke database
+    setTelegramSettings(newSettings);
+
+    // Reload bot dengan settings baru
+    await reloadTelegramBot();
 
     recordAudit(req, {
-      action: "admin.telegram.update.attempted",
+      action: "admin.telegram.update",
       targetType: "telegram",
       details: {
-        note: "Telegram settings harus diubah di .env file dan restart server",
-        botTokenProvided: botToken !== undefined,
-        chatIdsProvided: adminChatIds !== undefined,
+        botTokenUpdated: botToken !== undefined,
+        chatIdsUpdated: adminChatIds !== undefined,
+        chatIdsCount: newSettings.adminChatIds?.length || 0,
       },
     });
 
-    res.status(501).json({
-      error: "NOT_IMPLEMENTED",
-      message: "Untuk mengubah Telegram settings, edit file .env dan restart server. Fitur update via dashboard akan ditambahkan di versi mendatang.",
-      instructions: {
-        step1: "Edit file .env di root project",
-        step2: "Set TELEGRAM_BOT_TOKEN=<your_bot_token>",
-        step3: "Set TELEGRAM_ADMIN_CHAT_IDS=<chat_id1>,<chat_id2>",
-        step4: "Restart server dengan: npm run dev atau npm start",
+    res.json({
+      message: "Telegram settings berhasil diupdate dan bot sudah di-reload",
+      data: {
+        botTokenSet: Boolean(newSettings.botToken),
+        adminChatIds: newSettings.adminChatIds || [],
+        enabled: Boolean(newSettings.botToken && newSettings.adminChatIds?.length > 0),
       },
     });
   }),
@@ -676,27 +726,23 @@ adminRoutes.patch(
 /**
  * POST /api/v1/admin/telegram/reload
  *
- * Reload Telegram bot dengan settings baru dari .env tanpa restart server.
- * Berguna setelah admin edit .env file.
+ * Reload Telegram bot dengan settings baru dari database atau .env tanpa restart server.
  */
 adminRoutes.post(
   "/telegram/reload",
   asyncHandler(async (req, res) => {
     const { reloadTelegramBot } = await import("../services/telegramBot");
-    
-    reloadTelegramBot();
-    
+
+    await reloadTelegramBot();
+
     recordAudit(req, {
       action: "admin.telegram.reload",
       targetType: "telegram",
-      details: {
-        note: "Telegram bot reloaded with new settings from .env",
-      },
+      details: { manual: true },
     });
 
     res.json({
-      success: true,
-      message: "Telegram bot berhasil di-reload dengan settings baru dari .env",
+      message: "Telegram bot berhasil di-reload dengan settings terbaru",
     });
   }),
 );

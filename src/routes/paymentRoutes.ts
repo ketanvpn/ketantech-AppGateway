@@ -1,6 +1,6 @@
 import { Router, RequestHandler } from "express";
 import { z } from "zod";
-import { chargePayment } from "../services/paymentService";
+import { chargePayment, refreshPaymentStatus } from "../services/paymentService";
 import { transactionStore } from "../store/transactionStore";
 import { idempotencyMiddleware } from "../middleware/idempotency";
 import { clientAuth } from "../middleware/auth";
@@ -54,7 +54,8 @@ paymentRoutes.get(
     if (!record) {
       throw new GatewayError("NOT_FOUND", "Transaction not found", 404);
     }
-    res.json({ data: record });
+    const refreshed = await refreshPaymentStatus(record);
+    res.json({ data: refreshed });
   }),
 );
 
@@ -67,7 +68,8 @@ paymentRoutes.get(
       if (!record) {
         throw new GatewayError("NOT_FOUND", "Transaction not found", 404);
       }
-      res.json({ data: record });
+      const refreshed = await refreshPaymentStatus(record);
+      res.json({ data: refreshed });
       return;
     }
     // Tanpa filter orderId — kita TIDAK return all transactions di endpoint

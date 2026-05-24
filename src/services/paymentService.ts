@@ -146,6 +146,56 @@ export async function chargePayment(
   );
 }
 
+export async function refreshPaymentStatus(
+  tx: TransactionRecord,
+): Promise<TransactionRecord> {
+  if (tx.status !== "pending" || !tx.providerTransactionId) {
+    return tx;
+  }
+
+  const providers = getOrderedProviders();
+  const provider = providers.find((p) => p.name === tx.providerName);
+  if (!provider) {
+    logger.warn(
+      { txId: tx.id, provider: tx.providerName },
+      "cannot refresh payment status: provider not registered",
+    );
+    return tx;
+  }
+
+  try {
+    const newStatus = await provider.getStatus(tx.providerTransactionId);
+    if (newStatus !== tx.status) {
+      const updated = transactionStore.updateStatus(tx.id, newStatus);
+      if (updated) {
+        logger.info(
+          {
+            txId: tx.id,
+            orderId: tx.orderId,
+            provider: tx.providerName,
+            from: tx.status,
+            to: newStatus,
+          },
+          "payment status refreshed from provider",
+        );
+        return updated;
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      {
+        txId: tx.id,
+        orderId: tx.orderId,
+        provider: tx.providerName,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "payment status refresh failed; returning cached status",
+    );
+  }
+
+  return tx;
+}
+
 async function safeIsHealthy(provider: PaymentProvider): Promise<boolean> {
   try {
     return await provider.isHealthy();
