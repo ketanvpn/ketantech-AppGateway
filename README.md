@@ -11,6 +11,7 @@
 
 > 📦 Repo: <https://github.com/ketanvpn/ketantech-AppGateway>
 > 📘 [INTEGRATION.md](./INTEGRATION.md) — panduan integrasi ke aplikasi Anda
+> 🔌 [docs/WEBVPN-INTEGRATION.md](./docs/WEBVPN-INTEGRATION.md) — panduan khusus WebVPN (simple, step-by-step)
 > 🔒 [SECURITY.md](./SECURITY.md) — kontrol keamanan & tanggung jawab operator
 > 🗺️ [DEVELOPMENT-PLAN.md](./DEVELOPMENT-PLAN.md) — roadmap pengembangan & improvement
 
@@ -929,5 +930,4 @@ Internal use. PR / issue di <https://github.com/ketanvpn/ketantech-AppGateway>.
 ---
 
 **Build status:** 143 tests pass · TypeScript strict · Mobile-friendly dashboard · 1 moderate CVE (uuid)
-
 
