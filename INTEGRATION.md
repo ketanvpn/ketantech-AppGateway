@@ -51,6 +51,17 @@ curl http://gateway-host:3000/health/providers
 
 Kalau gateway di-deploy terpisah, ganti `localhost:3000` di semua contoh dengan host & port asli.
 
+### 2.1 Wajib Isi (Biar Integrasi Lancar)
+
+| Item | Wajib? | Contoh | Dipakai di |
+|------|--------|--------|------------|
+| Gateway Base URL | Ya | `https://pay.ketantech.my.id` | App internal (WebVPN/WiFi/dll) |
+| Client API Key | Opsional* | `ktp_client_xxx` | Header request charge/status |
+| Webhook Target URL App | Ya (kalau auto update) | `https://appmu.com/api/webhooks/ketantechpay` | KetantechPay outbound webhook |
+| Webhook Secret | Ya (kalau webhook aktif) | `secret-app-prod-32-char` | Verifikasi signature di app penerima |
+
+\*Wajib jika `X-Client-Key`/`x-api-key` enforcement diaktifkan.
+
 ---
 
 ## 3. Aturan Wajib (Penting!)
@@ -234,12 +245,47 @@ curl http://gateway-host:3000/api/v1/payments?orderId=ORD-123
 
 ### 5.2 Cara Lebih Baik: Webhook ke App Anda
 
-Polling boros bandwidth. Lebih baik gateway notify app Anda saat status berubah. **Saat ini gateway belum forward webhook ke aplikasi internal otomatis.** Sebagai workaround:
+Polling boros bandwidth. Lebih baik gateway notify app Anda saat status berubah.
 
-- Implementasikan polling latar belakang (background job tiap 5 detik), atau
-- Tambah forwarding di `src/services/webhookService.ts` (kirim HTTP POST ke app Anda setelah `applied`).
+✅ **Sekarang sudah didukung:** KetantechPay bisa kirim webhook outbound ke aplikasi internal (WebVPN, WiFi, dll) lewat endpoint admin:
 
-Roadmap fitur ini sudah masuk daftar.
+- `GET /api/v1/admin/webhook-targets`
+- `PUT /api/v1/admin/webhook-targets`
+
+Payload update target contoh:
+
+```json
+{
+  "targets": [
+    {
+      "id": "webvpn-prod",
+      "name": "WebVPN Production",
+      "url": "https://webvpn-domain.com/api/webhooks/ketantechpay",
+      "secret": "secret-webvpn-prod-32-char",
+      "enabled": true,
+      "events": ["success", "failed", "expired", "refunded"]
+    }
+  ]
+}
+```
+
+Header webhook outbound yang dikirim KetantechPay:
+
+- `x-ketantechpay-event`
+- `x-ketantechpay-event-id`
+- `x-ketantechpay-timestamp`
+- `x-ketantechpay-signature`
+
+---
+
+### 5.3 Contoh End-to-End WebVPN (3 Langkah, No Coding)
+
+1. Di WebVPN, isi:
+   - `ketantechPayBaseUrl`
+   - `ketantechPayClientKey` (opsional)
+   - `ketantechPayWebhookSecret`
+2. Di KetantechPay, tambah target webhook ke URL WebVPN (`/api/webhooks/ketantechpay`) dengan secret yang sama.
+3. Test 1 transaksi sampai status `success` → order/topup WebVPN harus auto-update.
 
 ---
 
