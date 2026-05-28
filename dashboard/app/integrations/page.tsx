@@ -15,6 +15,23 @@ type EditableTarget = {
   events: Array<(typeof EVENT_OPTIONS)[number]>;
 };
 
+function slugifyAppName(name: string): string {
+  const s = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return s || "app";
+}
+
+function randomHex(bytes = 16): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export default function IntegrationsPage() {
   const [items, setItems] = useState<EditableTarget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +152,21 @@ export default function IntegrationsPage() {
                     setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, secret: e.target.value } : p)))
                   }
                 />
+                <div className="md:col-span-2 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded border px-3 py-1.5 text-xs"
+                    onClick={() => {
+                      const prefix = slugifyAppName(item.name || item.id);
+                      const generated = `whsec_${prefix}_${randomHex(20)}`;
+                      setItems((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, secret: generated } : p)),
+                      );
+                    }}
+                  >
+                    Generate Secret
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-sm">
