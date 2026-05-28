@@ -46,6 +46,9 @@ const REDACT_PATHS = [
   "token",
 
   // Telegram bot token (kalau ke-spread accident)
+  "req.body.botToken",
+  "body.botToken",
+  "botToken",
   "telegramBotToken",
   "TELEGRAM_BOT_TOKEN",
 

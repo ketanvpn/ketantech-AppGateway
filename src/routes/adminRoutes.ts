@@ -710,8 +710,8 @@ adminRoutes.get(
 );
 
 const telegramUpdateSchema = z.object({
-  botToken: z.string().optional(),
-  adminChatIds: z.string().optional(),
+  botToken: z.string().max(500).optional(),
+  adminChatIds: z.string().max(2000).optional(),
 });
 
 /**
@@ -738,10 +738,28 @@ adminRoutes.patch(
     }
 
     if (adminChatIds !== undefined) {
-      const chatIdArray = adminChatIds
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const chatIdArray = Array.from(
+        new Set(
+          adminChatIds
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (chatIdArray.length > 20) {
+        throw new GatewayError("VALIDATION_ERROR", "Maksimal 20 admin chat ID", 400);
+      }
+
+      const invalid = chatIdArray.find((id) => !/^-?\d{5,20}$/.test(id));
+      if (invalid) {
+        throw new GatewayError(
+          "VALIDATION_ERROR",
+          `Format chat ID tidak valid: ${invalid}. Gunakan angka Telegram (contoh: 690744680)`,
+          400,
+        );
+      }
+
       newSettings.adminChatIds = chatIdArray.length > 0 ? chatIdArray : undefined;
     }
 
@@ -975,6 +993,4 @@ async function safeHealth(fn: () => Promise<boolean>): Promise<boolean> {
     return false;
   }
 }
-
-
 
