@@ -11,6 +11,7 @@ type EditableTarget = {
   name: string;
   url: string;
   secret: string;
+  secretMasked?: string;
   enabled: boolean;
   events: Array<(typeof EVENT_OPTIONS)[number]>;
 };
@@ -48,6 +49,7 @@ export default function IntegrationsPage() {
             name: r.name,
             url: r.url,
             secret: "",
+            secretMasked: r.secretMasked,
             enabled: r.enabled,
             events: (r.events?.filter((e) => EVENT_OPTIONS.includes(e as any)) as EditableTarget["events"]) || ["success"],
           })),
@@ -86,9 +88,16 @@ export default function IntegrationsPage() {
         enabled: i.enabled,
         events: i.events,
       }));
-      await api.updateWebhookTargets(payload);
+      const saved = await api.updateWebhookTargets(payload);
+      const maskedMap = new Map(saved.map((s) => [s.id, s.secretMasked || ""]));
       setMsg("✅ Tersimpan. Webhook multi-app sudah aktif.");
-      setItems((prev) => prev.map((p) => ({ ...p, secret: "" })));
+      setItems((prev) =>
+        prev.map((p) => ({
+          ...p,
+          secret: "",
+          secretMasked: maskedMap.get(p.id) || p.secretMasked,
+        })),
+      );
     } catch (e: any) {
       setMsg(`❌ Gagal simpan: ${e?.message || "unknown error"}`);
     } finally {
@@ -167,6 +176,11 @@ export default function IntegrationsPage() {
                     Generate Secret
                   </button>
                 </div>
+                {item.secretMasked && !item.secret && (
+                  <div className="md:col-span-2 text-xs text-slate-500">
+                    Secret tersimpan: <code>{item.secretMasked}</code>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-sm">
