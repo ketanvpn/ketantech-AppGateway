@@ -152,5 +152,13 @@ export interface SystemSettingsPatch {
   trustProxy?: boolean | number | string | null;
 }
 
+export interface WebhookTarget {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  events?: PaymentStatus[];
+  secretMasked?: string;
+}
 
 

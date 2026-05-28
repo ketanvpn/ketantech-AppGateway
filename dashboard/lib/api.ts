@@ -10,6 +10,7 @@ import {
   SystemSettingsPatch,
   SystemSettingsSnapshot,
   Transaction,
+  WebhookTarget,
 } from "./types";
 
 
@@ -258,6 +259,33 @@ export const api = {
       {
         method: "PATCH",
         body: JSON.stringify(patch),
+      },
+    );
+    return r.data;
+  },
+
+  async getWebhookTargets(): Promise<WebhookTarget[]> {
+    const r = await adminFetch<{ data: WebhookTarget[] }>(
+      "/api/v1/admin/webhook-targets",
+    );
+    return r.data;
+  },
+
+  async updateWebhookTargets(
+    targets: Array<{
+      id: string;
+      name: string;
+      url: string;
+      secret: string;
+      enabled: boolean;
+      events?: ("pending" | "success" | "failed" | "expired" | "refunded")[];
+    }>,
+  ): Promise<WebhookTarget[]> {
+    const r = await adminFetch<{ data: WebhookTarget[] }>(
+      "/api/v1/admin/webhook-targets",
+      {
+        method: "PUT",
+        body: JSON.stringify({ targets }),
       },
     );
     return r.data;

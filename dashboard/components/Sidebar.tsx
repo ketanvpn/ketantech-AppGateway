@@ -23,6 +23,7 @@ const groups: Array<{
     title: "Konfigurasi",
     items: [
       { href: "/credentials", label: "Credentials", icon: <IconKey /> },
+      { href: "/integrations", label: "Integrations", icon: <IconPlug /> },
       { href: "/orderkuota", label: "OrderKuota", icon: <IconMobile /> },
       { href: "/settings", label: "Providers", icon: <IconSliders /> },
       { href: "/system", label: "System", icon: <IconWrench /> },
@@ -203,6 +204,17 @@ function IconKey() {
     <svg {...iconProps}>
       <circle cx="7.5" cy="15.5" r="3.5" />
       <path d="M21 2 11 12M16 7l3 3M14 9l3 3" />
+    </svg>
+  );
+}
+function IconPlug() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 2v6" />
+      <path d="M8 2v6" />
+      <path d="M16 2v6" />
+      <path d="M6 8h12v2a6 6 0 0 1-6 6h0a6 6 0 0 1-6-6V8z" />
+      <path d="M12 16v6" />
     </svg>
   );
 }
