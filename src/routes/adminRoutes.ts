@@ -572,6 +572,21 @@ const systemUpdateSchema = z
     message: "Minimal satu field harus diisi",
   });
 
+const webhookTargetSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().min(1).max(120),
+  url: z.string().url(),
+  secret: z.string().min(8).max(256),
+  enabled: z.boolean().default(true),
+  events: z
+    .array(z.enum(["pending", "success", "failed", "expired", "refunded"]))
+    .optional(),
+});
+
+const webhookTargetsUpdateSchema = z.object({
+  targets: z.array(webhookTargetSchema).max(50),
+});
+
 /**
  * PATCH /api/v1/admin/system
  *
@@ -600,6 +615,40 @@ adminRoutes.patch(
     });
 
     res.json({ data: after });
+  }),
+);
+
+/**
+ * GET /api/v1/admin/webhook-targets
+ *
+ * Daftar endpoint webhook outbound (secret dimask).
+ */
+adminRoutes.get(
+  "/webhook-targets",
+  asyncHandler(async (_req, res) => {
+    res.json({ data: settingsStore.outboundWebhooksSnapshot() });
+  }),
+);
+
+/**
+ * PUT /api/v1/admin/webhook-targets
+ *
+ * Upsert seluruh daftar endpoint webhook outbound.
+ */
+adminRoutes.put(
+  "/webhook-targets",
+  asyncHandler(async (req, res) => {
+    const body = webhookTargetsUpdateSchema.parse(req.body);
+    settingsStore.setOutboundWebhooks(body.targets);
+    recordAudit(req, {
+      action: "admin.webhook-targets.update",
+      targetType: "system",
+      details: {
+        count: body.targets.length,
+        ids: body.targets.map((t) => t.id),
+      },
+    });
+    res.json({ data: settingsStore.outboundWebhooksSnapshot() });
   }),
 );
 
@@ -926,7 +975,6 @@ async function safeHealth(fn: () => Promise<boolean>): Promise<boolean> {
     return false;
   }
 }
-
 
 
 

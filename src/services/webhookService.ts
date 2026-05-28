@@ -8,6 +8,7 @@ import {
 import { getProvider } from "../providers";
 import { transactionStore } from "../store/transactionStore";
 import { logger } from "../utils/logger";
+import { dispatchPaymentStatusWebhook } from "./outboundWebhookService";
 
 /**
  * Coba ekstrak amount dari payload webhook untuk validasi cross-check.
@@ -198,7 +199,10 @@ export async function processWebhook(
       .catch(() => {});
   }
 
+  if (updated) {
+    dispatchPaymentStatusWebhook(updated).catch(() => {});
+  }
+
   return { status: "applied", transaction: updated };
 }
-
 

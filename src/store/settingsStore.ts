@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { encrypt, decrypt } from "../utils/crypto";
 import { logger } from "../utils/logger";
 import { validateProviderBaseUrl } from "../utils/ssrfGuard";
+import { PaymentStatus } from "../types";
 
 
 
@@ -23,6 +24,16 @@ const KEY_ORDER = "providerOrder";
 const KEY_FORCE_DOWN = "forceDown";
 const KEY_CREDENTIALS = "credentials";
 const KEY_SYSTEM = "system";
+const KEY_OUTBOUND_WEBHOOKS = "outboundWebhooks";
+
+export interface OutboundWebhookTarget {
+  id: string;
+  name: string;
+  url: string;
+  secret: string;
+  enabled: boolean;
+  events?: PaymentStatus[];
+}
 
 /**
  * System-level settings yang bisa diatur runtime dari dashboard.
@@ -111,6 +122,7 @@ class SettingsStore {
    * akan fallback ke nilai dari config (.env).
    */
   private _systemOverride!: Partial<SystemSettings>;
+  private _outboundWebhooks!: OutboundWebhookTarget[];
   private _initialized = false;
 
 
@@ -130,6 +142,9 @@ class SettingsStore {
     const sysRow = db
       .prepare("SELECT value_json FROM settings WHERE key = ?")
       .get(KEY_SYSTEM) as { value_json: string } | undefined;
+    const outboundWebhookRow = db
+      .prepare("SELECT value_json FROM settings WHERE key = ?")
+      .get(KEY_OUTBOUND_WEBHOOKS) as { value_json: string } | undefined;
 
 
     if (orderRow) {
@@ -171,7 +186,47 @@ class SettingsStore {
       ? (JSON.parse(sysRow.value_json) as Partial<SystemSettings>)
       : {};
 
+    this._outboundWebhooks = outboundWebhookRow
+      ? (JSON.parse(outboundWebhookRow.value_json) as OutboundWebhookTarget[])
+      : [];
+
     this._initialized = true;
+  }
+
+  getOutboundWebhooks(): OutboundWebhookTarget[] {
+    this.ensureInit();
+    return this._outboundWebhooks
+      .filter((w) => w.enabled)
+      .map((w) => ({
+        ...w,
+        secret: decrypt(w.secret),
+      }));
+  }
+
+  outboundWebhooksSnapshot(): Array<
+    Omit<OutboundWebhookTarget, "secret"> & { secretMasked: string }
+  > {
+    this.ensureInit();
+    return this._outboundWebhooks.map((w) => ({
+      id: w.id,
+      name: w.name,
+      url: w.url,
+      enabled: w.enabled,
+      events: w.events,
+      secretMasked: maskSecret(decrypt(w.secret)),
+    }));
+  }
+
+  setOutboundWebhooks(targets: OutboundWebhookTarget[]): void {
+    this.ensureInit();
+    for (const t of targets) {
+      validateProviderBaseUrl(t.url);
+    }
+    this._outboundWebhooks = targets.map((t) => ({
+      ...t,
+      secret: encrypt(t.secret),
+    }));
+    this.persist(KEY_OUTBOUND_WEBHOOKS, this._outboundWebhooks);
   }
 
   /**

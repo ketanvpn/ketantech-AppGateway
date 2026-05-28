@@ -16,6 +16,7 @@ import {
 } from "./snippets";
 
 type Lang = "node" | "php" | "python" | "curl";
+type DocTab = "guide" | "api";
 
 const LANG_TABS: { value: Lang; label: string; emoji: string }[] = [
   { value: "node", label: "Node.js", emoji: "🟩" },
@@ -26,6 +27,7 @@ const LANG_TABS: { value: Lang; label: string; emoji: string }[] = [
 
 export default function DocsPage() {
   const [lang, setLang] = useState<Lang>("node");
+  const [docTab, setDocTab] = useState<DocTab>("guide");
 
   return (
     <div className="space-y-8">
@@ -38,6 +40,86 @@ export default function DocsPage() {
           bahasa, copy-paste code, jalan.
         </p>
       </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setDocTab("guide")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              docTab === "guide"
+                ? "bg-brand-600 text-white"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            📘 Panduan Lengkap
+          </button>
+          <button
+            onClick={() => setDocTab("api")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              docTab === "api"
+                ? "bg-brand-600 text-white"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            ⚡ API & Webhook (Singkat)
+          </button>
+        </div>
+      </section>
+
+      {docTab === "api" && (
+        <>
+          <Section title="Yang Dibutuhkan (untuk awam)">
+            <ul className="space-y-2 text-sm text-slate-700">
+              <Check>
+                Punya <code>BASE_URL</code> gateway (contoh: <code>https://pay.ketantech.my.id</code>)
+              </Check>
+              <Check>
+                Saat bikin pembayaran, panggil <code>POST /api/v1/payments/charge</code>
+              </Check>
+              <Check>
+                Wajib kirim header <code>Idempotency-Key</code> (anti double charge)
+              </Check>
+              <Check>
+                Simpan <code>transactionId</code> dari response, lalu cek status via <code>GET /api/v1/payments/:id</code>
+              </Check>
+            </ul>
+          </Section>
+
+          <Section title="Endpoint Inti">
+            <ApiBlock method="POST" path="/api/v1/payments/charge" desc="Buat tagihan baru" />
+            <ApiBlock method="GET" path="/api/v1/payments/:id" desc="Cek status transaksi" />
+            <ApiBlock method="GET" path="/api/v1/payments?orderId=..." desc="Cek transaksi pakai orderId Anda" />
+          </Section>
+
+          <Section title="Webhook (Ini Lokasinya)">
+            <p className="mb-3 text-sm text-slate-700">
+              Webhook dipakai provider untuk kirim update status pembayaran ke gateway Anda.
+            </p>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <div><code>POST /api/v1/webhooks/midtrans</code></div>
+              <div><code>POST /api/v1/webhooks/xendit</code></div>
+              <div><code>POST /api/v1/webhooks/doku</code></div>
+              <div><code>POST /api/v1/webhooks/tripay</code></div>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Contoh URL production: <code>https://pay.ketantech.my.id/api/v1/webhooks/midtrans</code>
+            </p>
+          </Section>
+
+          <Section title="Alur Super Singkat">
+            <ol className="ml-5 list-decimal space-y-2 text-sm text-slate-700">
+              <li>App Anda create charge.</li>
+              <li>User bayar via paymentUrl.</li>
+              <li>Provider kirim webhook ke endpoint di atas.</li>
+              <li>Status transaksi berubah ke success/failed/expired.</li>
+              <li>App Anda cek status by transactionId.</li>
+            </ol>
+          </Section>
+        </>
+      )}
+
+      {docTab === "guide" && (
+        <>
 
       {/* ── Section 0: Pengantar untuk awam ──────────────────────── */}
       <section className="overflow-hidden rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50/60 via-white to-white p-6 shadow-soft">
@@ -478,6 +560,8 @@ curl -X POST https://gateway.yourdomain.com/api/v1/admin/orderkuota/sync \\
           <Check>App internal sudah update <code>GATEWAY_URL</code> ke production</Check>
         </ul>
       </Section>
+        </>
+      )}
     </div>
   );
 }
