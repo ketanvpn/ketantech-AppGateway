@@ -106,6 +106,44 @@ export default function DocsPage() {
             </p>
           </Section>
 
+          <Section title="Integrasi Banyak App (WebVPN, WiFi, dll)">
+            <ol className="ml-5 list-decimal space-y-2 text-sm text-slate-700">
+              <li>Setiap aplikasi punya endpoint webhook sendiri.</li>
+              <li>Di aplikasi tujuan, simpan <strong>Webhook Secret</strong>.</li>
+              <li>
+                Di KetantechPay, tambah target di <code>/api/v1/admin/webhook-targets</code> (url + secret + events).
+              </li>
+              <li>Status pembayaran berubah → KetantechPay broadcast ke target yang aktif.</li>
+            </ol>
+
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contoh Payload Target</div>
+              <CodeBlock
+                language="json"
+                code={`{
+  "targets": [
+    {
+      "id": "webvpn-prod",
+      "name": "WebVPN Production",
+      "url": "https://webvpn-domain.com/api/webhooks/ketantechpay",
+      "secret": "secret-webvpn-prod-32-char",
+      "enabled": true,
+      "events": ["success", "failed", "expired", "refunded"]
+    },
+    {
+      "id": "wifi-prod",
+      "name": "WiFi Voucher Production",
+      "url": "https://wifi-domain.com/api/webhooks/ketantechpay",
+      "secret": "secret-wifi-prod-32-char",
+      "enabled": true,
+      "events": ["success"]
+    }
+  ]
+}`}
+              />
+            </div>
+          </Section>
+
           <Section title="Alur Super Singkat">
             <ol className="ml-5 list-decimal space-y-2 text-sm text-slate-700">
               <li>App Anda create charge.</li>
